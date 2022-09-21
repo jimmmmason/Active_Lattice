@@ -2,54 +2,92 @@ cd("/home/jm2386/Active_Lattice/")
 using DrWatson
 @quickactivate "Active_Lattice"
 
-using StatsBase, DataStructures, UnPack
+using StatsBase, DataStructures, UnPack, LinearAlgebra
 
-function initialize(site_distribution::Array{Float64,2}, angles::Array{Float64,2}, rates::Array{} ; L=10,)
-    η = fill(0,(L,2))
-    c = zeros(((L,2),4))
-    j = fill([],(L,4))
+
+function uniform_initial_param(; name = "test", D =1. , λ =1. ,ρa = 0.1, ρp = 0.1, L=4, d=2)
+    param = Dict{String,Any}()  
+    #this is the only dimension dependent part:
     Ω = [[i,j] for i in 1:L for j in 1:L] 
-    E = [[1,0],[0,1],[-1,0],[0,-1],]
+    E = [[1,0],[0,1],[0,-1],[-1,0],]
+    site_distribution = fill([1-ρa-ρp, ρa, ρp],(L,L))
 
-    for x ∈ Ω
-        local w, n
-        w = Weights(site_distribution)
-        #fill model
-        n = sample([0,1,2],w)
-        η[x...] = [n, angles[x...]]
+    function angles(x,n) 
+        if n == 1
+            return 2*π*rand()
+        else
+            return -1
+        end
     end
-    for x ∈ Ω
-        for i in 1:4
-        #find adjacent sites
-        y  = (x + E[i] -[1,1]) .% L + [1,1]
-        #fill rates
-        c[x...,i]   = rates[η[x...]+1,η[y...]]
-        #fill jump vectors
-        j[x...,i] = [x,y]
+    function rates(n,m,i)
+        if m[1]>0
+            return 0
+        elseif n[1]==0
+            return 0.
+        elseif n[2]==2
+            return L^2*D
+        else
+            return L^2*D + L*λ*E[i]⋅[cos(n[2]),sin(n[2])] 
+        end
     end
-    return η, c, j, Ω
+
+    @pack! param = name, L, D, λ, ρa, ρp, Ω, E, site_distribution, angles, rates
+    return param
 end
 
-function model_step!(config::Array{Int64,1},propensities::Array{Float64,1},jumps::Array{},rates::Array{};k =2, d=1, L=10)
-    #select jump
-    w     = Weights(propensities)
-    jump  = sample(jumps, w)
-    #execute jumps
-    #println(η)
-    #println(jump)
-    config[jump[1]] += -1
-    config[jump[2]] += 1
-    #correct propensity
-    for i in jump
-        #find adjacent sites
-        iplus  = (i % L)+1
-        iminus = L - ((L+1-i)% L)
-        # correct jumps out
-        propensities[i]   = rates[config[i]+1,config[iplus]+1]
-        propensities[i+L] = rates[config[i]+1,config[iminus]+1]
-        # correct jumps in
-        propensities[iplus+L]   = rates[config[iplus]+1,config[i]+1]
-        propensities[iminus] = rates[config[iminus]+1,config[i]+1]
+
+function initialize(param::Dict{String,Any})
+    @unpack name, L, λ, ρa, ρp, Ω, E, site_distribution, angles, rates = param
+    # create configuration, rates and jumps
+    η = fill([],(L,L))
+    c = fill(0.,(L,L,4))
+    j = fill([],(L,L,4))
+    #fill configuration
+    for x ∈ Ω
+        local w, n
+        w = Weights(site_distribution[x...])
+        #fill model
+        n = sample([0,1,2],w)
+        η[x...] = [n, angles(x,n)]
     end
-    return config, propensities, jumps
+    #fill rates and jumps
+    for x ∈ Ω 
+        for i in 1:4
+            local y
+            #find adjacent site
+            y  = (x + E[i] +[L-1,L-1]) .% L + [1,1]
+            #fill rates 
+            c[x...,i] = rates(η[x...],η[y...],i)
+            #fill jump vectors
+            j[x...,i] = [x,y]
+        end
+    end
+    #pack into model
+    model = Dict{String,Any}() 
+    @pack! model = η, c, j
+    return model
+end
+
+function model_step!(param::Dict{String,Any},model::Dict{String,Any})
+    @unpack name, L, λ, ρa, ρp, Ω, E, site_distribution, angles, rates = param
+    @unpack η, c, j = model
+    #select jump
+    w     = Weights( [(c...)...])
+    jump  = sample(j, w)
+    #execute jumps
+    η[jump[2]...] = deepcopy(η[jump[1]...])
+    η[jump[1]...] = [0,-1]
+    #correct propensity
+    for x in jump
+        for i in 1:4
+            local y
+            #find adjacent site
+            y  = (x + E[i] +[L-1,L-1]) .% L + [1,1]
+            #correct new rates 
+            c[x...,i]   = rates(η[x...],η[y...],i  )
+            c[y...,5-i] = rates(η[y...],η[x...],5-i)
+        end
+    end
+    @pack! model = η, c, j
+    return jump
 end
