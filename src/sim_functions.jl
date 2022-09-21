@@ -35,7 +35,6 @@ function uniform_initial_param(; name = "test", D =1. , λ =1. ,ρa = 0.1, ρp =
     return param
 end
 
-
 function initialize(param::Dict{String,Any})
     @unpack name, L, λ, ρa, ρp, Ω, E, site_distribution, angles, rates = param
     # create configuration, rates and jumps
@@ -63,17 +62,20 @@ function initialize(param::Dict{String,Any})
         end
     end
     #pack into model
+    t = 0.
     model = Dict{String,Any}() 
-    @pack! model = η, c, j
+    @pack! model = η, c, j, t
     return model
 end
 
 function model_step!(param::Dict{String,Any},model::Dict{String,Any})
     @unpack name, L, λ, ρa, ρp, Ω, E, site_distribution, angles, rates = param
-    @unpack η, c, j = model
+    @unpack η, c, j, t = model
     #select jump
     w     = Weights( [(c...)...])
     jump  = sample(j, w)
+    # increase time
+    t += randexp()/sum(c)
     #execute jumps
     η[jump[2]...] = deepcopy(η[jump[1]...])
     η[jump[1]...] = [0,-1]
@@ -88,6 +90,33 @@ function model_step!(param::Dict{String,Any},model::Dict{String,Any})
             c[y...,5-i] = rates(η[y...],η[x...],5-i)
         end
     end
-    @pack! model = η, c, j
-    return jump
+    @pack! model = η, c, j, t
+    return t
+end
+
+function run_model_until!(param::Dict{String,Any},model::Dict{String,Any},T; return_all = false)
+    if return_all
+        η_saves = []
+        t_saves = []
+        while model["t"] < T 
+            model_step!(param,model)
+            push!(η_saves,model["η"])
+            push!(t_saves,t)
+        end
+        return t_saves, η_saves
+    else
+        while model["t"] < T 
+            model_step!(param,model)
+        end
+    end
+end
+
+function run_model_intervals!(param::Dict{String,Any},model::Dict{String,Any},T; interval = 0.001)
+    η_saves = []
+    t_saves = []
+    while model["t"] < T
+        run_model_until!(param,model,model["t"]+interval; return_all = false)
+        push!(η_saves, model["η"])
+        push!(t_saves, model["t"])
+    end 
 end
