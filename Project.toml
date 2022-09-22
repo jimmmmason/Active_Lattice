@@ -3,6 +3,7 @@ name = "Active_Lattice"
 [deps]
 DataStructures = "864edb3b-99cc-5e75-8d2d-829cb0a9cfe8"
 DrWatson = "634d3b9d-ee7a-5ddf-bec9-22491ea816e1"
+PyPlot = "d330b81b-6aea-500a-939a-2ce795aea3ee"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 UnPack = "3a884ed6-31ef-47d7-9d2a-63182c4928ed"
 
