@@ -194,12 +194,13 @@ function plot_eta(fig::Figure, ax::PyObject, param::Dict{String,Any}, t::Float64
     dx = cos.(directions)
     dy = sin.(directions)
     t = round(t; digits=5)
+    Φ = round(translation_invariance(η;Ω = Ω,L= L); digits =4)
     #figure configuration
     ax.xaxis.set_ticks([])
         ax.yaxis.set_ticks([])
         ax.axis([0., 1., 0., 1.])
         ax.set_aspect("equal")
-        ax.set_title("ρₐ = $(ρa),  ρₚ = $(ρp), Pe = $(λ), t = $(t)")
+        ax.set_title("ρₐ = $(ρa),  ρₚ = $(ρp), Pe = $(λ), t = $(t), Φ = $(Φ)")
     # Plot points
     ax.quiver(active[1,:],active[2,:], dx,dy,
         directions,
@@ -261,7 +262,7 @@ function fourier_config(η::Array{Array{Any,1},2}; Ω::Array{Array{Int64,1},1}= 
 end
 
 function translation_invariance(η::Array{Array{Any,1},2}; Ω::Array{Array{Int64,1},1}= [],L::Int64 = 1)
-    return norm(fourier_config(η; Ω = Ω, L= L, k =[1.,0.]))+norm(fourier_config(η; Ω = Ω, L= L, k =[0.,1.]))
+    return norm(fourier_config(η; Ω = Ω, L= L, k =[2*π/L,0.]))+norm(fourier_config(η; Ω = Ω, L= L, k =[0.,2*π/L]))
 end
 
 
@@ -269,17 +270,17 @@ end
 #Example 
 #=
 #Parameters
-param = uniform_initial_param(L=32, λ = 100)
+param = uniform_initial_param(L=64, λ = 20, ρa = 0.5, ρp = 0.0)
 model = initialize(param)
 #expand variables
 @unpack name, L, λ, ρa, ρp, Ω, E, site_distribution, angles, rates = param
 @unpack η, c, j, t = model
 #Run and save
 using BenchmarkTools
-T = 0.1
+T = 0.01
 #model_step!(param,model)
 #@time t_saves,η_saves = run_model_until!(param,model,T; return_all = true, save_on =false);
-@time t_saves,η_saves = run_model_intervals!(param,model,T; interval = 0.00001, save_on =true);
+@time t_saves,η_saves = run_model_intervals!(param,model,T; interval = 0.0001, save_on =false);
 #Loading
 @unpack name, L, λ, ρa, ρp = param
 filename = "/home/jm2386/Active_Lattice/data/sims_raw/$(name)/start_time=$(0.00001)_end_time=$(T)_interval=$(interval)_size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ).jld2";
@@ -298,9 +299,10 @@ translation_invariance(η_saves[n];Ω = Ω,L= L)
 clf()
 fig, ax = PyPlot.subplots(figsize =(10, 10))
 ax.plot(y)
+display(fig)
 clf()
 fig, ax = PyPlot.subplots(figsize =(10, 10))
-n = 86
+n = 6000
 plot_eta(fig,ax,param, t_saves[n], η_saves[n])
 display(fig)
 
