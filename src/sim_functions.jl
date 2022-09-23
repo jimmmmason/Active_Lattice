@@ -1,8 +1,7 @@
 cd("/home/jm2386/Active_Lattice/")
 using DrWatson
 @quickactivate "Active_Lattice"
-
-#Runnning simulation
+#runnning simulation
 using StatsBase, DataStructures, UnPack, LinearAlgebra, Random
 
 function uniform_initial_param(; name = "test", D =1. , λ =1. ,ρa = 0.1, ρp = 0.1, L=10, d=2)
@@ -11,7 +10,7 @@ function uniform_initial_param(; name = "test", D =1. , λ =1. ,ρa = 0.1, ρp =
     Ω = [[i,j] for i in 1:L for j in 1:L] 
     E = [[1,0],[0,1],[0,-1],[-1,0],]
     site_distribution = fill([1-ρa-ρp, ρa, ρp],(L,L))
-    Δt = 0.001/L^2
+    Δt = 0.0001/L^2
     function angles(x,n) 
         if n == 1
             return 2*π*rand()
@@ -35,7 +34,7 @@ function uniform_initial_param(; name = "test", D =1. , λ =1. ,ρa = 0.1, ρp =
 end
 
 function initialize(param::Dict{String,Any})
-    @unpack name, L, λ, ρa, ρp, Ω, E, site_distribution, angles, rates = param
+    @unpack name, L, D, λ, ρa, ρp, Δt, Ω, E, site_distribution, angles, rates = param
     # create configuration, rates and jumps
     η = fill([],(L,L))
     c = fill(0.,(L,L,4))
@@ -62,8 +61,10 @@ function initialize(param::Dict{String,Any})
     end
     #pack into model
     t = 0.
-    model = Dict{String,Any}() 
+    Δt = 0.1/sum(c)
+    model = Dict{String,Any}()
     @pack! model = η, c, j, t
+    @pack! param = name, L, D, λ, ρa, ρp, Δt, Ω, E, site_distribution, angles, rates
     return model
 end
 
@@ -91,6 +92,9 @@ function model_step!(param::Dict{String,Any},model::Dict{String,Any})
                 c[y...,5-i] = rates(η[y...],η[x...],5-i)
             end
         end
+        did_jump = "yes"
+    else
+        did_jump = "no"
     end
     #diffuse angles
     for x ∈ Ω
@@ -99,30 +103,49 @@ function model_step!(param::Dict{String,Any},model::Dict{String,Any})
         end
     end
     @pack! model = η, c, j, t
-    return t
+    return did_jump
 end
 
-function run_model_until!(param::Dict{String,Any},model::Dict{String,Any},T; return_all = false, save_on=true)
-    if return_all
-        η_saves = []
-        t_saves = []
-        start_time = deepcopy(model["t"])
-        while model["t"] < T 
-            model_step!(param,model)
-            push!(η_saves,model["η"])
-            push!(t_saves,model["t"])
-        end
-        if save_on
-            @unpack name, L, λ, ρa, ρp = param
-            filename = "/home/jm2386/Active_Lattice/data/sims_raw/$(name)/start_time=$(start_time)_end_time=$(T)_interval=$(param["Δt"])_size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ).jld2";
-            data = Dict{String,Any}();
-            @pack! data = param, η_saves, t_saves
-            safesave(filename,data)
-        end
-        return t_saves, η_saves
+function run_model_until!(param::Dict{String,Any},model::Dict{String,Any},T; return_all = false, save_on=true, steps = 0)
+    if steps>0
+            η_saves = []
+            t_saves = []
+            start_time = deepcopy(model["t"])
+            for i in 1:steps
+                model_step!(param,model)
+                push!(η_saves,deepcopy(model["η"]))
+                push!(t_saves,deepcopy(model["t"]))
+            end
+            if save_on
+                @unpack name, L, λ, ρa, ρp = param
+                filename = "/home/jm2386/Active_Lattice/data/sims_raw/$(name)/start_time=$(round(t_saves[1]; digits=5))_end_time=$(round(t_saves[frames+1]; digits=5))_interval=$(interval)_size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ).jld2";
+                data = Dict{String,Any}();
+                @pack! data = param, η_saves, t_saves
+                safesave(filename,data)
+            end
+            return t_saves, η_saves
     else
-        while model["t"] < T 
-            model_step!(param,model)
+        if return_all
+            η_saves = []
+            t_saves = []
+            start_time = deepcopy(model["t"])
+            while model["t"] < T 
+                model_step!(param,model)
+                push!(η_saves,deepcopy(model["η"]))
+                push!(t_saves,deepcopy(model["t"]))
+            end
+            if save_on
+                @unpack name, L, λ, ρa, ρp = param
+                filename = "/home/jm2386/Active_Lattice/data/sims_raw/$(name)/start_time=$(round(start_time; digits = 5))_end_time=$(round(T; digits = 5))_interval=$(param["Δt"])_size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ).jld2";
+                data = Dict{String,Any}();
+                @pack! data = param, η_saves, t_saves
+                safesave(filename,data)
+            end
+            return t_saves, η_saves
+        else
+            while model["t"] < T 
+                model_step!(param,model)
+            end
         end
     end
 end
@@ -135,42 +158,44 @@ function run_model_intervals!(param::Dict{String,Any},model::Dict{String,Any},T;
         local t
         t = deepcopy(model["t"]+interval)
         run_model_until!(param,model,t; return_all = false)
-        push!(η_saves, model["η"])
-        push!(t_saves, model["t"])
+        push!(η_saves, deepcopy(model["η"]))
+        push!(t_saves, deepcopy(model["t"]))
     end 
     if save_on
         @unpack name, L, λ, ρa, ρp = param
-        filename = "/home/jm2386/Active_Lattice/data/sims_raw/$(name)/start_time=$(start_time)_end_time=$(T)_interval=$(interval)_size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ).jld2";
+        filename = "/home/jm2386/Active_Lattice/data/sims_raw/$(name)/start_time=$(round(start_time; digits = 5))_end_time=$(round(T; digits = 5))_interval=$(interval)_size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ).jld2";
         data = Dict{String,Any}();
         @pack! data = param, η_saves, t_saves
         safesave(filename,data)
     end
     return t_saves, η_saves
 end
-
+##
 #visualise data
-using PyPlot
+using PyPlot, PyCall
+@pyimport matplotlib.animation as anim
 
-function animate_etas(param,η_saves,t_saves)
-    frames = length(η_saves)
-    makeframe(i) = plot_eta(param, η_saves[i],t_saves[i])
+function animate_etas(param,t_saves,η_saves)
+    frames = length(η_saves)-1
+    fig, ax = PyPlot.subplots(figsize =(10, 10))
+    makeframe(i) = plot_eta(fig,ax,param, t_saves[i+1], η_saves[i+1])
     myanim = anim.FuncAnimation(fig, makeframe, frames=frames, interval=20)
-
     # Convert it to an MP4 movie file and saved on disk in this format.
-    filename = "testvid.mp4"
-    myanim[:save](filename, bitrate=-1, dpi= 500, extra_args=["-vcodec", "libx264", "-pix_fmt", "yuv420p"])
+    @unpack name, L, λ, ρa, ρp = param
+    filename = "/home/jm2386/Active_Lattice/plots/vids/$(name)/start_time=$(round(t_saves[1]; digits=5))_end_time=$(round(t_saves[frames+1]; digits=5))_interval=$(interval)_size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ).mp4"
+    myanim[:save](filename, bitrate=-1, dpi= 100, extra_args=["-vcodec", "libx264", "-pix_fmt", "yuv420p"])
 end 
 
-function plot_eta(param::Dict{String,Any}, η::Array{Array{Any,1},2},t::Float64)
+function plot_eta(fig::Figure, ax::PyObject, param::Dict{String,Any}, t::Float64, η::Array{Array{Any,1},2})
     @unpack name, L, λ, ρa, ρp, Ω, E, Δt, site_distribution, angles, rates = param
+    ax.clear()
     #collect data
     passive, active, directions = extract_points(Ω,η,L)
     dx = cos.(directions)
     dy = sin.(directions)
     t = round(t; digits=5)
     #figure configuration
-    fig, ax = PyPlot.subplots(figsize =(10, 10))
-        ax.xaxis.set_ticks([])
+    ax.xaxis.set_ticks([])
         ax.yaxis.set_ticks([])
         ax.axis([0., 1., 0., 1.])
         ax.set_aspect("equal")
@@ -188,12 +213,11 @@ function plot_eta(param::Dict{String,Any}, η::Array{Array{Any,1},2},t::Float64)
         scale = L,
     )
     ax.errorbar(passive[1,:],passive[2,:], 
-        markersize = 3, 
+        markersize = 400/L, 
         fmt= "o", 
         color = "black",
         alpha=0.8,
     )
-    fig
     return fig
 end 
 
@@ -215,24 +239,69 @@ function extract_points(Ω::Array{Array{Int64,1},1}, η::Array{Array{Any,1},2},L
     return passive, active, directions
 end
 
+##
+#phase seperation metircs
+
+function site_ρ(ηx::Array{Any,1})
+    if ηx[1] == 1
+        return 1
+    elseif ηx[1] == 2
+        return 1
+    else
+        return 0
+    end
+end
+
+function fourier_config(η::Array{Array{Any,1},2}; Ω::Array{Array{Int64,1},1}= [],L::Int64 = 1, k::Vector{Float64}=[0,0])
+    ϕLL = 0.
+    for x ∈ Ω
+        ϕLL += ( 1-site_ρ(η[x...]))*exp(- im* k⋅ x)
+    end
+    return ϕLL/L^2
+end
+
+function translation_invariance(η::Array{Array{Any,1},2}; Ω::Array{Array{Int64,1},1}= [],L::Int64 = 1)
+    return norm(fourier_config(η; Ω = Ω, L= L, k =[1.,0.]))+norm(fourier_config(η; Ω = Ω, L= L, k =[0.,1.]))
+end
+
+
+
 #Example 
 #=
 #Parameters
-param = uniform_initial_param(L=100)
+param = uniform_initial_param(L=32, λ = 100)
 model = initialize(param)
 #expand variables
 @unpack name, L, λ, ρa, ρp, Ω, E, site_distribution, angles, rates = param
 @unpack η, c, j, t = model
 #Run and save
-T = 0.001
+using BenchmarkTools
+T = 0.1
 #model_step!(param,model)
-#η_saves,t_saves = run_model_until!(param,model,T; return_all = true, save_on =true)
-η_saves,t_saves = run_model_intervals!(param,model,T; interval = T/100, save_on =true)
+#@time t_saves,η_saves = run_model_until!(param,model,T; return_all = true, save_on =false);
+@time t_saves,η_saves = run_model_intervals!(param,model,T; interval = 0.00001, save_on =true);
 #Loading
 @unpack name, L, λ, ρa, ρp = param
-filename = "/home/jm2386/Active_Lattice/data/sims_raw/$(name)/time=$(T)_interval=$(interval)_size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ).jld2";
+filename = "/home/jm2386/Active_Lattice/data/sims_raw/$(name)/start_time=$(0.00001)_end_time=$(T)_interval=$(interval)_size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ).jld2";
 data = wload(filename)
 #plotting
-fig = plot_eta(param, η, 0.)
+fig, ax = PyPlot.subplots(figsize =(10, 10))
+n = length(t_saves)
+plot_eta(fig,ax,param, t_saves[n], η_saves[n])
 display(fig)
+#video
+animate_etas(param,t_saves,η_saves)
+#symmetry
+y = translation_invariance.(η_saves;Ω = Ω,L= L)
+n = length(t_saves)
+translation_invariance(η_saves[n];Ω = Ω,L= L)
+clf()
+fig, ax = PyPlot.subplots(figsize =(10, 10))
+ax.plot(y)
+clf()
+fig, ax = PyPlot.subplots(figsize =(10, 10))
+n = 86
+plot_eta(fig,ax,param, t_saves[n], η_saves[n])
+display(fig)
+
 =#
