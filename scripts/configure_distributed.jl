@@ -5,7 +5,8 @@ using Distributed
 
 addprocs([("indium",:auto)])
 
-rmprocs([5,6,7])
+rmprocs([2,3,4,5,6])
+rmprocs([7])
 
 @distributed for i in 1:nprocs()
     host = gethostname()
