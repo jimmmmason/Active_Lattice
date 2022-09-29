@@ -153,7 +153,6 @@ function run_model_until!(param::Dict{String,Any},model::Dict{String,Any},T; ret
         end
     end
 end
-
 function run_model_intervals!(param::Dict{String,Any},model::Dict{String,Any},T; interval = 0.001, save_on =false)
     η_saves = []
     t_saves = []
@@ -221,7 +220,9 @@ function animate_etas(param,t_saves,η_saves)
     myanim = anim.FuncAnimation(fig, makeframe, frames=frames, interval=20)
     # Convert it to an MP4 movie file and saved on disk in this format.
     @unpack name, L, λ, ρa, ρp = param
-    filename = "/home/jm2386/Active_Lattice/plots/vids/$(name)/start_time=$(round(t_saves[1]; digits=5))_end_time=$(round(t_saves[frames+1]; digits=5))_interval=$(interval)_size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ).mp4"
+    pathname = "/home/jm2386/Active_Lattice/plots/vids/$(name)/start_time=$(round(t_saves[1]; digits=5))_end_time=$(round(t_saves[frames+1]; digits=5))_interval=$(interval)_size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)"
+    mkpath(pathname)
+    filename = "/home/jm2386/Active_Lattice/plots/vids/$(name)/start_time=$(round(t_saves[1]; digits=5))_end_time=$(round(t_saves[frames+1]; digits=5))_interval=$(interval)_size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)/start_time=$(round(t_saves[1]; digits=5))_end_time=$(round(t_saves[frames+1]; digits=5))_interval=$(interval)_size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ).mp4"
     myanim[:save](filename, bitrate=-1, dpi= 100, extra_args=["-vcodec", "libx264", "-pix_fmt", "yuv420p"])
 end 
 
@@ -346,5 +347,3 @@ fig, ax = PyPlot.subplots(figsize =(10, 10))
 n = 6000
 plot_eta(fig,ax,param, t_saves[n], η_saves[n])
 display(fig)
-
-=#
