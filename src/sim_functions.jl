@@ -2,6 +2,7 @@ cd("/home/jm2386/Active_Lattice/")
 using DrWatson
 @quickactivate "Active_Lattice"
 println("booted")
+##
 #runnning simulation
 using StatsBase, DataStructures, UnPack, LinearAlgebra, Random
 
@@ -11,6 +12,7 @@ function uniform_initial_param(; name = "test", D =1. , λ =1. ,ρa = 0.1, ρp =
     Ω = [[i,j] for i in 1:L for j in 1:L] 
     E = [[1,0],[0,1],[0,-1],[-1,0],]
     site_distribution = fill([1-ρa-ρp, ρa, ρp],(L,L))
+    γ = 0
     function angles(x,n) 
         if n == 1
             return 2*π*rand()
@@ -30,12 +32,41 @@ function uniform_initial_param(; name = "test", D =1. , λ =1. ,ρa = 0.1, ρp =
             return L^2*D + L*λ*E[i]⋅[cos(n[2]),sin(n[2])] 
         end
     end
-    @pack! param = name, L, D, λ, ρa, ρp, Δt, Ω, E, site_distribution, angles, rates
+    @pack! param = name, L, D, λ, γ, ρa, ρp, Δt, Ω, E, site_distribution, angles, rates
+    return param
+end
+
+function extra_mixing_initial_param(; name = "test", D =1. , λ =1. ,ρa = 0.1, ρp = 0.1, L=10, d=2, Δt = 0.001, γ = 0.01)
+    param = Dict{String,Any}()  
+    #this is the only dimension dependent part:
+    Ω = [[i,j] for i in 1:L for j in 1:L] 
+    E = [[1,0],[0,1],[0,-1],[-1,0],]
+    site_distribution = fill([1-ρa-ρp, ρa, ρp],(L,L))
+    function angles(x,n) 
+        if n == 1
+            return 2*π*rand()
+        else
+            return -1
+        end
+    end
+    function rates(n,m,i)
+        E = [[1,0],[0,1],[0,-1],[-1,0],]
+        if m[1]>0
+            return L^2*γ
+        elseif n[1]==0
+            return 0.
+        elseif n[2]==2
+            return L^2*D + L^2*γ
+        else
+            return L^2*D + L*λ*E[i]⋅[cos(n[2]),sin(n[2])] + L^2*γ
+        end
+    end
+    @pack! param = name, L, D, λ, γ, ρa, ρp, Δt, Ω, E, site_distribution, angles, rates
     return param
 end
 
 function initialize_model(param::Dict{String,Any})
-    @unpack name, L, D, λ, ρa, ρp, Δt, Ω, E, site_distribution, angles, rates = param
+    @unpack name, L, D, λ, γ, ρa, ρp, Δt, Ω, E, site_distribution, angles, rates = param
     # create configuration, rates and jumps
     η = fill([],(L,L))
     c = fill(0.,(L,L,4))
@@ -66,7 +97,7 @@ function initialize_model(param::Dict{String,Any})
     t = 0.
     model = Dict{String,Any}()
     @pack! model = η, c, j, t, α, Δτ
-    @pack! param = name, L, D, λ, ρa, ρp, Δt, Ω, E, site_distribution, angles, rates
+    @pack! param = name, L, D, λ, γ, ρa, ρp, Δt, Ω, E, site_distribution, angles, rates
     return model
 end
 
@@ -76,22 +107,21 @@ function model_step!(param::Dict{String,Any},model::Dict{String,Any})
     #increase time 
     Δt = round(α)*Δτ #roughly Δt
     t += Δt  
+    #see if jump occurs
     for i in 1:round(α)
-        # see if jump occurs
         if rand() < α*Δτ 
-            #select jump
+        #select jump
             w     = Weights( [(c...)...])
             jump  = sample(j, w)
-            #execute jumps
-            η[jump[2]...] = deepcopy(η[jump[1]...])
-            η[jump[1]...] = [0,-1]
-            #correct propensity
+        #execute jumps
+            η[jump[2]...], η[jump[1]...] = η[jump[1]...], η[jump[2]...]
+        #correct propensity
             for x in jump
                 for i in 1:4
                     local y
-                    #find adjacent site
+            #find adjacent site
                     y  = (x + E[i] +[L-1,L-1]) .% L + [1,1]
-                    #correct new rates 
+            #correct new rates 
                     c[x...,i]   = rates(η[x...],η[y...],i  )
                     c[y...,5-i] = rates(η[y...],η[x...],5-i)
                 end
@@ -108,80 +138,13 @@ function model_step!(param::Dict{String,Any},model::Dict{String,Any})
     @pack! model = η, c, t
 end
 
-#=
-function run_model_until!(param::Dict{String,Any},model::Dict{String,Any},T; return_all = false, save_on=true, steps = 0)
-    if steps>0
-            η_saves = []
-            t_saves = []
-            start_time = deepcopy(model["t"])
-            for i in 1:steps
-                model_step!(param,model)
-                push!(η_saves,deepcopy(model["η"]))
-                push!(t_saves,deepcopy(model["t"]))
-            end
-            if save_on
-                @unpack name, L, λ, ρa, ρp = param
-                filename = "/home/jm2386/Active_Lattice/data/sims_raw/$(name)/start_time=$(round(t_saves[1]; digits=5))_end_time=$(round(t_saves[frames+1]; digits=5))_interval=$(interval)_size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ).jld2";
-                data = Dict{String,Any}();
-                @pack! data = param, η_saves, t_saves
-                safesave(filename,data)
-            end
-            return t_saves, η_saves
-    else
-        if return_all
-            η_saves = []
-            t_saves = []
-            start_time = deepcopy(model["t"])
-            while model["t"] < T 
-                model_step!(param,model)
-                push!(η_saves,deepcopy(model["η"]))
-                push!(t_saves,deepcopy(model["t"]))
-            end
-            if save_on
-                @unpack name, L, λ, ρa, ρp = param
-                filename = "/home/jm2386/Active_Lattice/data/sims_raw/$(name)/start_time=$(round(start_time; digits = 5))_end_time=$(round(T; digits = 5))_interval=$(param["Δt"])_size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ).jld2";
-                data = Dict{String,Any}();
-                @pack! data = param, η_saves, t_saves
-                safesave(filename,data)
-            end
-            return t_saves, η_saves
-        else
-            while model["t"] < T 
-                model_step!(param,model)
-            end
-            return t_saves, η_saves
-        end
-    end
-end
-function run_model_intervals!(param::Dict{String,Any},model::Dict{String,Any},T; interval = 0.001, save_on =false)
-    η_saves = []
-    t_saves = []
-    start_time = deepcopy(model["t"])
-    while model["t"] < T
-        local t
-        t = deepcopy(model["t"]+interval)
-        run_model_until!(param,model,t; return_all = false)
-        push!(η_saves, deepcopy(model["η"]))
-        push!(t_saves, deepcopy(model["t"]))
-    end 
-    if save_on
-        @unpack name, L, λ, ρa, ρp = param
-        filename = "/home/jm2386/Active_Lattice/data/sims_raw/$(name)/start_time=$(round(start_time; digits = 5))_end_time=$(round(T; digits = 5))_interval=$(interval)_size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ).jld2";
-        data = Dict{String,Any}();
-        @pack! data = param, η_saves, t_saves
-        safesave(filename,data)
-    end
-    return t_saves, η_saves
-end
-=#
-
 function run_model_until!(param::Dict{String,Any},model::Dict{String,Any},T; save_on =false)
     while model["t"] < T 
         model_step!(param,model)
         if save_on
-            @unpack name, L, λ, ρa, ρp, Δt = param
+            @unpack name, L, λ, γ, ρa, ρp, Δt = param
             @unpack η, t = model
-            filename = "/home/jm2386/Active_Lattice/data/sims_raw/$(name)/size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_Δt=$(Δt)/time=$(round(t; digits = 5))_size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)/time=$(round(t; digits = 5))_size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ).jld2";
+            filename = "/store/DAMTP/jm2386/Active_Lattice/data/sims_raw/$(name)/size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ)_Δt=$(Δt)/time=$(round(t; digits = 5))_size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ)/time=$(round(t; digits = 5))_size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ).jld2";
             data = Dict{String,Any}();
             @pack! data = param, η, t
             safesave(filename,data)
@@ -189,16 +152,15 @@ function run_model_until!(param::Dict{String,Any},model::Dict{String,Any},T; sav
     end
 end
 
-function run_and_dump(param::Dict{String,Any},model::Dict{String,Any},T; dump_interval = 0.01, save_on =false)
-    start_time = deepcopy(model["t"])
+function run_and_dump_sim(param::Dict{String,Any},model::Dict{String,Any},T; dump_interval = 0.01, save_on =false)
     while model["t"] < T
         local t
-        t = deepcopy(model["t"]+interval)
+        t = deepcopy(model["t"]+dump_interval)
         run_model_until!(param,model,t; save_on =false)
         if save_on
-            @unpack name, L, λ, ρa, ρp, Δt = param
+            @unpack name, L, λ, γ, ρa, ρp, Δt = param
             @unpack η, t = model
-            filename = "/home/jm2386/Active_Lattice/data/sims_raw/$(name)/size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_Δt=$(Δt)/time=$(round(t; digits = 5))_size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)/time=$(round(t; digits = 5))_size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ).jld2";
+            filename = "/store/DAMTP/jm2386/Active_Lattice/data/sims_raw/$(name)/size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ)_Δt=$(Δt)/time=$(round(t; digits = 5))_size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ)/time=$(round(t; digits = 5))_size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ).jld2";
             data = Dict{String,Any}();
             @pack! data = param, η, t
             safesave(filename,data)
@@ -207,7 +169,24 @@ function run_and_dump(param::Dict{String,Any},model::Dict{String,Any},T; dump_in
 end
 
 
-
+function load_etas(param::Dict{String,Any},T; dump_interval = 0.01)
+    s =0.
+    t_saves = []
+    η_saves = []
+    while s < T
+        try 
+            @unpack name, L, λ, γ, ρa, ρp, Δt = param
+            filename = "/store/DAMTP/jm2386/Active_Lattice/data/sims_raw/$(name)/size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ)_Δt=$(Δt)/time=$(round(t; digits = 5))_size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ)/time=$(round(t; digits = 5))_size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ).jld2";
+            data = wload(filename)
+            @unpack  η, t =data
+            push!(t_saves,t)
+            push!(η_saves,η)
+        catch
+        end
+        s += dump_interval
+    end
+    return t_saves, η_saves
+end
 ##
 #visualise data
 using PyPlot, PyCall
@@ -219,15 +198,15 @@ function animate_etas(param,t_saves,η_saves)
     makeframe(i) = plot_eta(fig,ax,param, t_saves[i+1], η_saves[i+1])
     myanim = anim.FuncAnimation(fig, makeframe, frames=frames, interval=20)
     # Convert it to an MP4 movie file and saved on disk in this format.
-    @unpack name, L, λ, ρa, ρp = param
-    pathname = "/home/jm2386/Active_Lattice/plots/vids/$(name)/start_time=$(round(t_saves[1]; digits=5))_end_time=$(round(t_saves[frames+1]; digits=5))_interval=$(interval)_size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)"
+    @unpack name, L, λ, γ, ρa, ρp = param
+    pathname = "/store/DAMTP/jm2386/Active_Lattice/plots/vids/$(name)/start_time=$(round(t_saves[1]; digits=5))_end_time=$(round(t_saves[frames+1]; digits=5))_interval=$(interval)_size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ)"
     mkpath(pathname)
-    filename = "/home/jm2386/Active_Lattice/plots/vids/$(name)/start_time=$(round(t_saves[1]; digits=5))_end_time=$(round(t_saves[frames+1]; digits=5))_interval=$(interval)_size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)/start_time=$(round(t_saves[1]; digits=5))_end_time=$(round(t_saves[frames+1]; digits=5))_interval=$(interval)_size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ).mp4"
+    filename = "/store/DAMTP/jm2386/Active_Lattice/plots/vids/$(name)/start_time=$(round(t_saves[1]; digits=5))_end_time=$(round(t_saves[frames+1]; digits=5))_interval=$(interval)_size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ)/start_time=$(round(t_saves[1]; digits=5))_end_time=$(round(t_saves[frames+1]; digits=5))_interval=$(interval)_size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ).mp4"
     myanim[:save](filename, bitrate=-1, dpi= 100, extra_args=["-vcodec", "libx264", "-pix_fmt", "yuv420p"])
 end 
 
 function plot_eta(fig::Figure, ax::PyObject, param::Dict{String,Any}, t::Float64, η::Array{Array{Any,1},2})
-    @unpack name, L, λ, ρa, ρp, Ω, E, Δt, site_distribution, angles, rates = param
+    @unpack name, L, λ, γ, ρa, ρp, Ω, E, Δt, site_distribution, angles, rates = param
     ax.clear()
     #collect data
     passive, active, directions = extract_points(Ω,η,L)
@@ -310,24 +289,20 @@ end
 #Example 
 #=
 #Parameters
-param = uniform_initial_param(L=32, λ = 20, ρa = 0.5, ρp = 0.0, Δt = 0.01)
+param = uniform_initial_param(L=32, λ = 16, ρa = 0.9, ρp = 0.0, Δt = 0.01)
+param = extra_mixing_initial_param(L=32, λ = 16, ρa = 0.9, ρp = 0.0, Δt = 0.01, γ = 0.01)
 model = initialize_model(param)
 #expand variables
-@unpack name, L, λ, ρa, ρp, Ω, E, site_distribution, angles, rates = param
+@unpack name, L, λ, γ, ρa, ρp, Ω, E, site_distribution, angles, rates = param
 @unpack η, c, j, t = model
 #Run and save
 using BenchmarkTools
-T = 0.08
-@time model_step!(param,model);
-@time run_model_until!(param, model, T; save_on = true);
+T = 0.05
+@time model_step!(param, model);
+run_and_dump_sim(param,model, T; dump_interval = 0.01, save_on =true)
 #Loading
-@unpack name, L, λ, ρa, ρp = param
-filename = "/home/jm2386/Active_Lattice/data/sims_raw/$(name)/start_time=$(0.00001)_end_time=$(T)_interval=$(interval)_size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ).jld2";
-data = wload(filename)
+t_saves, η_saves = load_etas(param, T; dump_interval = 0.01)
 #plotting
-fig, ax = PyPlot.subplots(figsize =(10, 10))
-plot_eta(fig,ax,param, t, η)
-#
 fig, ax = PyPlot.subplots(figsize =(10, 10))
 n = length(t_saves)
 plot_eta(fig,ax,param, t_saves[n], η_saves[n])
