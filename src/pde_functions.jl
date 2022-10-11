@@ -242,7 +242,8 @@ function run_pde_until!(param::Dict{String,Any},density::Dict{String,Any},T; sav
             if save_on
                 @unpack name, Nx, Nθ, λ, ρa, ρp, δt = param
                 @unpack fa, fp, ρ, m, t = density
-                filename = "/store/DAMTP/jm2386/Active_Lattice/data/sims_raw/$(name)/size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_Δt=$(Δt)/time=$(round(t; digits = 5))_size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)/time=$(round(t; digits = 5))_size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ).jld2";
+                ##need to update this
+                filename = "/store/DAMTP/jm2386/Active_Lattice/data/pde_raw/$(name)/size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_dt=$(δt)/time=$(round(t; digits = 5))_size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)/time=$(round(t; digits = 5))_size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ).jld2";
                 data = Dict{String,Any}();
                 @pack! data = param, fa, fp, ρ, m, t
                 safesave(filename,data)

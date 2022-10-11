@@ -7,12 +7,14 @@ include("/home/jm2386/Active_Lattice/src/sim_functions.jl")
 
 #varying parameters
 params = []
-name = "high_density_active"
-for ρ in [0.96,0.97,0.98,0.99]
-for λ in [1,8,16,32]
+name = "high_density_mixing"
+for ρ in [0.7, 0.8, 0.9, 0.95, 0.99]
+for γ in [0., 0.01, 0.1]
+for λ in [4, 8, 12, 16]
         local param
-        param = uniform_initial_param(; name = name, λ = λ ,ρa = ρ, ρp = 0., L=64, Δt = 0.01)
+        param = extra_mixing_initial_param(; name = name, λ = λ ,ρa = ρ, ρp = 0., L=64, Δt = 0.01, γ = γ)
         push!(params,param)
+end
 end
 end
 #run sims
@@ -37,5 +39,5 @@ display(fig)
 @distributed for param ∈ params
     T = 5.0
     t_saves, η_saves = load_etas(param, T)
-    println("success")
+    animate_etas(param,t_saves,η_saves)
 end

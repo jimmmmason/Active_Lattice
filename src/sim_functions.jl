@@ -6,7 +6,7 @@ println("booted")
 #runnning simulation
 using StatsBase, DataStructures, UnPack, LinearAlgebra, Random
 
-function uniform_initial_param(; name = "test", D =1. , λ =1. ,ρa = 0.1, ρp = 0.1, L=10, d=2, Δt = 0.001)
+function uniform_initial_param(; name = "test", D =1. , λ =1. ,ρa = 0.1, ρp = 0.1, L=10, d=2, Δt = 0.01)
     param = Dict{String,Any}()  
     #this is the only dimension dependent part:
     Ω = [[i,j] for i in 1:L for j in 1:L] 
@@ -175,7 +175,8 @@ function load_etas(param::Dict{String,Any},T; dump_interval = 0.01)
     η_saves = []
     while s < T
         try 
-            @unpack name, L, λ, γ, ρa, ρp, Δt = param
+            t = s
+            @unpack name, L, λ, γ, ρa, ρp, Δt, = param
             filename = "/store/DAMTP/jm2386/Active_Lattice/data/sims_raw/$(name)/size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ)_Δt=$(Δt)/time=$(round(t; digits = 5))_size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ)/time=$(round(t; digits = 5))_size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ).jld2";
             data = wload(filename)
             @unpack  η, t =data
@@ -299,9 +300,9 @@ model = initialize_model(param)
 using BenchmarkTools
 T = 0.05
 @time model_step!(param, model);
-run_and_dump_sim(param,model, T; dump_interval = 0.01, save_on =true)
+run_model_until!(param,model, T; save_on =true)
 #Loading
-t_saves, η_saves = load_etas(param, T; dump_interval = 0.01)
+t_saves, η_saves = load_etas(param, T; dump_interval = 0.01);
 #plotting
 fig, ax = PyPlot.subplots(figsize =(10, 10))
 n = length(t_saves)
