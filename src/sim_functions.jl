@@ -132,7 +132,7 @@ function model_step!(param::Dict{String,Any},model::Dict{String,Any})
     #diffuse angles
     for x ∈ Ω
         if η[x...][1] == 1
-            η[x...][2] = (η[x...][2] + sqrt(Δt)*randn() + 2*π) % (2*π)
+            η[x...][2] = (η[x...][2] + sqrt(2*Δt)*randn() + 2*π) % (2*π)
         end
     end
     @pack! model = η, c, t
@@ -146,7 +146,7 @@ function run_model_until!(param::Dict{String,Any},model::Dict{String,Any},T; sav
             @unpack η, t = model
             filename = "/store/DAMTP/jm2386/Active_Lattice/data/sims_raw/$(name)/size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ)_Δt=$(Δt)/time=$(round(t; digits = 5))_size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ)/time=$(round(t; digits = 5))_size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ).jld2";
             data = Dict{String,Any}();
-            @pack! data = param, η, t
+            @pack! data = η, t
             safesave(filename,data)
         end
     end
@@ -162,12 +162,11 @@ function run_and_dump_sim(param::Dict{String,Any},model::Dict{String,Any},T; dum
             @unpack η, t = model
             filename = "/store/DAMTP/jm2386/Active_Lattice/data/sims_raw/$(name)/size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ)_Δt=$(Δt)/time=$(round(t; digits = 5))_size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ)/time=$(round(t; digits = 5))_size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ).jld2";
             data = Dict{String,Any}();
-            @pack! data = param, η, t
+            @pack! data = η, t
             safesave(filename,data)
         end
     end
 end
-
 
 function load_etas(param::Dict{String,Any},T; dump_interval = 0.01)
     s =0.
@@ -178,8 +177,7 @@ function load_etas(param::Dict{String,Any},T; dump_interval = 0.01)
             t = s
             @unpack name, L, λ, γ, ρa, ρp, Δt, = param
             filename = "/store/DAMTP/jm2386/Active_Lattice/data/sims_raw/$(name)/size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ)_Δt=$(Δt)/time=$(round(t; digits = 5))_size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ)/time=$(round(t; digits = 5))_size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ).jld2";
-            data = wload(filename)
-            @unpack  η, t =data
+            η, t = wload(filename, "η", "t")
             push!(t_saves,t)
             push!(η_saves,η)
         catch
@@ -302,6 +300,7 @@ T = 0.05
 @time model_step!(param, model);
 run_model_until!(param,model, T; save_on =true)
 #Loading
+T = 1.0
 t_saves, η_saves = load_etas(param, T; dump_interval = 0.01);
 #plotting
 fig, ax = PyPlot.subplots(figsize =(10, 10))
@@ -323,3 +322,4 @@ fig, ax = PyPlot.subplots(figsize =(10, 10))
 n = 6000
 plot_eta(fig,ax,param, t_saves[n], η_saves[n])
 display(fig)
+=#

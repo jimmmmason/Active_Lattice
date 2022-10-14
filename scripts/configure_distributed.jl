@@ -14,7 +14,7 @@ wake refract
 
 ssh cherry
 exit
-ssh cyllene
+##ssh cyllene
 exit
 ssh orthosie
 exit
@@ -22,8 +22,8 @@ ssh refract
 exit
 =#
 addprocs([("cherry",:auto)])
-addprocs([("cyllene",:auto)])
-addprocs([("orthosie",:auto)])
+addprocs([("cyllene")])
+addprocs([("orthosie")])
 addprocs([("refract",:auto)])
 
 rmprocs([2,3,4,5,6])
