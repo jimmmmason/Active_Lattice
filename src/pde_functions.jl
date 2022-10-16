@@ -5,12 +5,12 @@ println("booted")
 #runnning simulation
 using StatsBase, DataStructures, UnPack, LinearAlgebra, Random, TensorOperations, StaticArrays
 
-function pde_param(; name = "test", D =1. , λ =1. ,ρa = 0.1, ρp = 0.1, Nx = 100, Nθ = 100, δt = 0.0001)
+function pde_param(; name = "test", D =1. , λ =1. ,ρa = 0.5, ρp = 0.0, Nx = 100, Nθ = 100, δt = 0.0001, Dθ = 10, T= 0.001)
     Ω  = [[i,j] for i in 1:Nx for j in 1:Nx ] 
     S  = [ θ for θ in 1:Nθ]
     E = [[1,0],[0,1],[0,-1],[-1,0],]
     param = Dict{String,Any}()
-    @pack! param = name, D, λ, ρa, ρp, δt, Nx, Nθ, S,  E
+    @pack! param = name, D, λ, ρa, ρp, δt, Nx, Nθ, S,  E, Dθ, T
     return param
 end
 
@@ -65,8 +65,8 @@ function fast_U_xyθ(param::Dict{String,Any}, density::Dict{String,Any})
         magx = (m[y₁,y₂,:] +m[x₁,x₂,:])/2
         if ρx == 0.
         else
-            Ua[x₁,x₂,:,2] = dsx*(- Nx*(  logmρa[y₁,y₂,:])+Nx*(logmρa[x₁,x₂,:]) + λ*(eθ[:,1]) ) .+ (((1-dsx)/ρx) * (- Nx*( -logmρ[y₁,y₂]) + Nx*( -logmρ[x₁,x₂]))+((1-ρx-dsx)/ρx) * (λ*E[2] ⋅ magx))
-            Up[x₁,x₂,2] = dsx*(- Nx*( logmρp[y₁,y₂] ) + Nx*( logmρp[x₁,x₂] )) + (((1-dsx)/ρx) * (- Nx*( -logmρ[y₁,y₂]) + Nx*( -logmρ[x₁,x₂]))+((1-ρx-dsx)/ρx) * (λ*E[2] ⋅ magx))
+            Ua[x₁,x₂,:,2] = dsx*(- Nx*(  logmρa[y₁,y₂,:])-Nx*(logmρa[x₁,x₂,:]) + λ*(eθ[:,2]) ) .+ (((1-dsx)/ρx) * ( Nx*( logmρ[y₁,y₂] -logmρ[x₁,x₂]))+((1-ρx-dsx)/ρx) * (λ*E[2] ⋅ magx))
+            Up[x₁,x₂,2] = dsx*(- Nx*( logmρp[y₁,y₂] ) - Nx*( logmρp[x₁,x₂] )) + (((1-dsx)/ρx) * (Nx*( logmρ[y₁,y₂] -logmρ[x₁,x₂]))+((1-ρx-dsx)/ρx) * (λ*E[2] ⋅ magx))
         end
         ## 1 direction 
         y₁ = (x₁ +Nx)%Nx +1
@@ -76,9 +76,8 @@ function fast_U_xyθ(param::Dict{String,Any}, density::Dict{String,Any})
         magx = (m[y₁,y₂,:] + m[x₁,x₂,:])/2
         if ρx == 0.
         else
-            Ua[x₁,x₂,:,1] = dsx*(- Nx*(  logmρa[y₁,y₂,:]) + Nx*( logmρa[x₁,x₂,:]) + λ*(eθ[:,2]) ) .+ ( ((1-ρx-dsx)/ρx) * (λ*E[1] ⋅ magx) +((1-dsx)/ρx) * (- Nx*( -logmρ[y₁,y₂]) + Nx*( -logmρ[x₁,x₂])) )
-        #end 
-            Up[x₁,x₂,1] = dsx*(- Nx*( logmρp[y₁,y₂] ) + Nx*( logmρp[x₁,x₂] ))
+            Ua[x₁,x₂,:,2] = dsx*(- Nx*(  logmρa[y₁,y₂,:])-Nx*(logmρa[x₁,x₂,:]) + λ*(eθ[:,1]) ) .+ (((1-dsx)/ρx) * ( Nx*( logmρ[y₁,y₂] -logmρ[x₁,x₂]))+((1-ρx-dsx)/ρx) * (λ*E[1] ⋅ magx))
+            Up[x₁,x₂,2] = dsx*(- Nx*( logmρp[y₁,y₂] ) - Nx*( logmρp[x₁,x₂] )) + (((1-dsx)/ρx) * (Nx*( logmρ[y₁,y₂] -logmρ[x₁,x₂]))+((1-ρx-dsx)/ρx) * (λ*E[1] ⋅ magx))
         end
     end
     ## theta diection
@@ -132,7 +131,7 @@ function fast_F_xyθ(param::Dict{String,Any}, density::Dict{String,Any})
 end
 
 function pde_step!(param::Dict{String,Any}, density::Dict{String,Any})
-    @unpack δt, Nx, Nθ = param
+    @unpack δt, Nx, Nθ, Dθ = param
     Fa = Array{Float64,4}(undef, Nx, Nx, Nθ,2);
     Fp = Array{Float64,3}(undef, Nx, Nx,2);
     Fθ = Array{Float64,3}(undef, Nx, Nx, Nθ);
@@ -156,7 +155,7 @@ function pde_step!(param::Dict{String,Any}, density::Dict{String,Any})
     end
     for θ in 1:Nθ
         ϕ ::Int64 = ((θ % Nθ) +1)
-        fa[:,:,ϕ] += -dt*Nθ*(Fθ[:,:,ϕ]-Fθ[:,:,θ])/(2*π)
+        fa[:,:,ϕ] += -dt*Nθ*Dθ*(Fθ[:,:,ϕ]-Fθ[:,:,θ])/(2*π)
     end
     t::Float64 += dt
     #println(t)
@@ -169,6 +168,11 @@ end
 
 function run_pde_until!(param::Dict{String,Any},density::Dict{String,Any},T; save_on =false, max_steps = 100, save_interval = 1.)
     @unpack name, Nx, Nθ, λ, ρa, ρp, δt = param
+    if save_on
+        @unpack t = density
+        filename = "/store/DAMTP/jm2386/Active_Lattice/data/pde_raw/$(name)/Nx=$(Nx)_Nθ=$(Nθ)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_dt=$(δt)/time=$(round(t; digits = 4))_Nx=$(Nx)_Nθ=$(Nθ)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_dt=$(δt).jld2";
+        safesave(filename,density)
+    end
     if max_steps == false
         while density["t"] < T 
                 time_since_save = 0.
@@ -177,11 +181,9 @@ function run_pde_until!(param::Dict{String,Any},density::Dict{String,Any},T; sav
                     time_since_save += dt 
                 end
                 if save_on
-                    @unpack fa, fp, t = density
-                    filename = "/store/DAMTP/jm2386/Active_Lattice/data/pde_raw/$(name)/Nx=$(Nx)_Nθ=$(Nθ)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_dt=$(δt)/time=$(round(t; digits = 4))_size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)/time=$(round(t; digits = 5))_size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ).jld2";
-                    data = Dict{String,Any}();
-                    @pack! data = fa, fp, t
-                    safesave(filename,data)
+                    @unpack t = density
+                    filename = "/store/DAMTP/jm2386/Active_Lattice/data/pde_raw/$(name)/Nx=$(Nx)_Nθ=$(Nθ)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_dt=$(δt)/time=$(round(t; digits = 4))_Nx=$(Nx)_Nθ=$(Nθ)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_dt=$(δt).jld2";
+                    safesave(filename,density)
                 end
             end
     else
@@ -191,60 +193,60 @@ function run_pde_until!(param::Dict{String,Any},density::Dict{String,Any},T; sav
             while time_since_save < min(save_interval, T)
                 dt = pde_step!(param,density)
                 time_since_save += dt 
+                steps += 1
             end
             if save_on
-                @unpack fa, fp, t = density
-                filename = "/store/DAMTP/jm2386/Active_Lattice/data/pde_raw/$(name)/Nx=$(Nx)_Nθ=$(Nθ)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_dt=$(δt)/time=$(round(t; digits = 4))_size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)/time=$(round(t; digits = 5))_size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ).jld2";
-                data = Dict{String,Any}();
-                @pack! data = fa, fp, t
-                safesave(filename,data)
+                @unpack t = density
+                filename = "/store/DAMTP/jm2386/Active_Lattice/data/pde_raw/$(name)/Nx=$(Nx)_Nθ=$(Nθ)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_dt=$(δt)/time=$(round(t; digits = 4))_Nx=$(Nx)_Nθ=$(Nθ)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_dt=$(δt).jld2";
+                safesave(filename,density)
             end
-            steps += 1
         end
         return steps
     end
 end
 
 function perturb_pde!(param::Dict{String,Any}, density::Dict{String,Any}; δ = 0.01, n2 = 2)
-    @unpack Nx, S, ρa, ρp, λ = param
+    @unpack Nx, S, ρa, ρp, λ, Dθ = param
     @unpack fa = density
     δ = min(δ, 1 - ρa - ρp);
-    #from maria paper: 
-    β = ρa*λ/2;
-    γ = ρa;
-    Λ = 1/2*(-1 - 4*γ*n2*π^2 + sqrt(1 + 8*n2*π^2*(β^2 + γ*(2*γ*n2*π^2 - 1))));
-    C = 2*π*β / (1 + Λ)
+    #from stability: 
+    ρ = ρa + ρp
+    α = π/2 -1
+    ds = ( -ρ .+1).*( α*(2*α-1)/(2*α+1)*ρ.^2 + α*ρ .+1)
+    dsp = - ( α*(2*α-1)/(2*α+1)*ρ.^2 + α*ρ .+1) + ( -ρ .+1)*(2*α*(2*α-1)/(2*α+1)*ρ + α );
+    β = 1- ds;
+    a = λ* ( (1-ρ-ds)/ρ - dsp) /2
+    γ = -8*π^2
+    Λ = 1/2*(-Dθ - 4*γ*n2*π^2 + sqrt(1 + 8*n2*π^2*(β^2 + γ*(2*γ*n2*π^2 - 1))));
+    C = 2*π*ρa*(ρa + ρp)/ (1 + Λ)
     P = (x,y,θ) -> δ*(cos(2*π*x/Nx)*cos(2*π*y/Nx) - C*(sin(2*π*x/Nx)*cos(2*π*y/Nx)*cos(2π*θ/Nθ) + sin(2*π*y/Nx)*cos(2*π*x/Nx)*sin(2π*θ/Nθ) ));
     # 
     for x₁ in 1:Nx, x₂ in 1:Nx, θ in S
-        fa[x₁, x₂, θ] = P(x₁, x₂, θ);
+        fa[x₁, x₂, θ] += P(x₁, x₂, θ);
     end
     @pack! density = fa;
 end
 
-#=
-param = pde_param()
-density = initialize_density(param)
-perturb_pde!(param,density);
-run_pde_until!(param,density,0.001; save_on = true, max_steps = 20, save_interval = 0.0001)
-pde_step!(param, density);
-density["t"]
+function perturb_pde_run(para; max_steps = 20000)
+    @unpack T = param
+    density = initialize_density(param)
+    perturb_pde!(param,density);
+    run_pde_until!(param,density,T; save_on = true, max_steps = max_steps, save_interval = 0.001)
+end
 
-P = (x,y,θ) -> cos(2*pi*x)*cos(2*pi*y) - (sin(2*pi*x)*cos(2*pi*y)*cos(θ) + sin(2*pi*y)*cos(2*pi*x)*sin(θ) ));
-=#
 #visualise data
 using PyPlot, PyCall
 @pyimport matplotlib.animation as anim
 
 function load_pdes(param::Dict{String,Any},T; save_interval = 1.)
     @unpack name, Nx, Nθ, λ, ρa, ρp, δt = param
-    t = save_interval
+    t = 0.
     fa_saves = []
     fp_saves = []
     t_saves = []
-    while t<T
+    while t ≤ T
         try 
-            filename = "/store/DAMTP/jm2386/Active_Lattice/data/pde_raw/$(name)/size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_dt=$(δt)/time=$(round(t; digits = 4))_size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)/time=$(round(t; digits = 5))_size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ).jld2";
+            filename = "/store/DAMTP/jm2386/Active_Lattice/data/pde_raw/$(name)/Nx=$(Nx)_Nθ=$(Nθ)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_dt=$(δt)/time=$(round(t; digits = 4))_Nx=$(Nx)_Nθ=$(Nθ)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_dt=$(δt).jld2";
             data = wload(filename)
             push!(t_saves,data["t"])
             push!(fa_saves,data["fa"])
@@ -255,6 +257,7 @@ function load_pdes(param::Dict{String,Any},T; save_interval = 1.)
     end
     return t_saves, fa_saves, fp_saves
 end
+
 
 function animate_pdes(param,t_saves,pde_saves)
     @unpack name, L, λ, ρa, ρp, Δt = param
@@ -270,9 +273,10 @@ function animate_pdes(param,t_saves,pde_saves)
     myanim[:save](filename, bitrate=-1, dpi= 100, extra_args=["-vcodec", "libx264", "-pix_fmt", "yuv420p"])
 end 
 
-function plot_pde(fig::Figure, ax::PyObject, param::Dict{String,Any}, t::Float64, density::Dict{String,Any})
+function plot_pde_mag(fig::Figure, ax::PyObject, param::Dict{String,Any}, density::Dict{String,Any})
     @unpack λ, Nx, Nθ, S= param
-    ax.clear()
+    @unpack fa, fp, t = density
+    #fig, ax = PyPlot.subplots(figsize =(10, 10))
     #collect data
     eθ = [cos.(S*2π/Nθ) sin.(S*2π/Nθ)]
     @tensor begin
@@ -282,101 +286,98 @@ function plot_pde(fig::Figure, ax::PyObject, param::Dict{String,Any}, t::Float64
     absmag  = sqrt.(m[:,:,1].^2+m[:,:,2].^2)
     t = round(t; digits=5)
     #Φ = round(translation_invariance(η;Ω = Ω,L= L); digits =4)
+    Δx = 1/Nx
     #figure configuration
-    ax.xaxis.set_ticks([])
-        ax.yaxis.set_ticks([])
-        ax.axis([0., 1., 0., 1.])
+    #ax.xaxis.set_ticks([])
+        #ax.yaxis.set_ticks([])
+        ax.axis([Δx, 1., Δx, 1.])
         ax.set_aspect("equal")
         ax.set_title("ρₐ = $(ρa),  ρₚ = $(ρp), Pe = $(λ), t = $(t)")
     # Plot points
-    fig, ax = PyPlot.subplots(figsize =(10, 10))
-    cp = ax.contourf(absmag;levels = 100, set_cmap = winter() )
+    cp = ax.contourf(Δx:Δx:1, Δx:Δx:1,absmag; levels = 100, set_cmap = winter() )
     fig.colorbar(cp)
-    display(fig)
+    #fig
     return fig
-
-
-    directions[2]
 end 
+
+function plot_pde_mass(fig::Figure, ax::PyObject, param::Dict{String,Any}, density::Dict{String,Any})
+    @unpack λ, Nx, Nθ, S= param
+    @unpack fa, fp, t = density
+    #fig, ax = PyPlot.subplots(figsize =(10, 10))
+    #collect data
+    eθ = [cos.(S*2π/Nθ) sin.(S*2π/Nθ)]
+    @tensor begin
+        m[a,b,d] := 2π *fa[a,b,θ]*eθ[θ,d]/Nθ
+    end
+    ρ = fp + sum(fa; dims =3)[:,:,1].*(2*π/Nθ)
+    #absmag  = sqrt.(m[:,:,1].^2+m[:,:,2].^2)
+    t = round(t; digits=5)
+    #Φ = round(translation_invariance(η;Ω = Ω,L= L); digits =4)
+    Δx = 1/Nx
+    #figure configuration
+    #ax.xaxis.set_ticks([])
+        #ax.yaxis.set_ticks([])
+        ax.axis([Δx, 1., Δx, 1.])
+        ax.set_aspect("equal")
+        ax.set_title("ρₐ = $(ρa),  ρₚ = $(ρp), Pe = $(λ), t = $(t)")
+    # Plot points
+    cp = ax.contourf(Δx:Δx:1, Δx:Δx:1,ρ; levels = 100, set_cmap = winter() )
+    fig.colorbar(cp)
+    #fig
+    return fig
+end 
+
 
 ##
 #phase seperation metircs
 
-function site_ρ(ηx::Array{Any,1})
-    if ηx[1] == 1
-        return 1
-    elseif ηx[1] == 2
-        return 1
-    else
-        return 0
-    end
+function dist_from_unif(param, fa, fp)
+    @unpack name, Nx, Nθ, λ, ρa, ρp, δt = param
+    return 2*π*sqrt(sum( (fa .- ρa/(2*π) ).^2))/(Nx*Nx*Nθ) + sqrt(sum( (fp .- ρp).^2))/(Nx*Nx)
 end
 
-function fourier_pde(η::Array{Array{Any,1},2}; Ω::Array{Array{Int64,1},1}= [],L::Int64 = 1, k::Vector{Float64}=[0,0])
-    ϕLL = 0.
-    for x ∈ Ω
-        ϕLL += ( 1-site_ρ(η[x...]))*exp(- im* k⋅ x)
+function time_dist_from_unif(param, fa_saves, fp_saves)
+    n = length(fa_saves)
+    dist_saves = zeros(n)
+    for i in 1:n
+        dist_saves[i] = dist_from_unif(param, fa_saves[i], fp_saves[i])
     end
-    return ϕLL/L^2
-end
-
-function translation_invariance(η::Array{Array{Any,1},2}; Ω::Array{Array{Int64,1},1}= [],L::Int64 = 1)
-    return norm(fourier_config(η; Ω = Ω, L= L, k =[2*π/L,0.]))+norm(fourier_config(η; Ω = Ω, L= L, k =[0.,2*π/L]))
+    return dist_saves
 end
 
 
 #Example 
 #=
 #Parameters
-param = pde_param()
+param = pde_param(λ = 100)
 density = initialize_density(param)
+perturb_pde!(param,density);
 #expand variables
-@unpack name, D, λ, ρa, ρp, δt, Nx, Nθ, Ω, S,  E, Eθ = param
-@unpack fa, fp, ρ, t = density
+@unpack name, D, λ, ρa, ρp, δt, Nx, Nθ, = param
+@unpack fa, fp, t = density
 #Run and save
-using BenchmarkTools
-T = 0.08
-@time model_step!(param,model);
-@time run_model_until!(param, model, T; save_on = true);
+run_pde_until!(param,density,0.002; save_on = true, max_steps = 20, save_interval = 0.001)
+#for pmap
+param = pde_param(λ = 100, T = 0.003, name = "test6")
+perturb_pde_run(param; max_steps = 30)
 #Loading
-T = 1.0
-t_saves, η_saves = load_etas(param, T)
+t_saves, fa_saves, fp_saves = load_pdes(param,0.003; save_interval = 0.001)
+dist_saves = time_dist_from_unif(param, fa_saves, fp_saves)
 #plotting
 fig, ax = PyPlot.subplots(figsize =(10, 10))
-plot_eta(fig,ax,param, t, η)
-display(fig)
-# plot individual frame
-n = 6000
-n = length(t_saves)
-clf()
+n = 4
+t, fa, fp = t_saves[n], fa_saves[n], fp_saves[n]
+@pack! density = fa, fp, t
 fig, ax = PyPlot.subplots(figsize =(10, 10))
-plot_eta(fig,ax,param, t_saves[n], η_saves[n])
+plot_pde_mass(fig,ax,param,density)
 display(fig)
-#create video
-animate_etas(param,t_saves,η_saves)
-#plot symmetry over time
-y = translation_invariance.(η_saves;Ω = Ω,L= L)
-n = length(t_saves)
-translation_invariance(η_saves[n];Ω = Ω,L= L)
-clf()
-y = translation_invariance.(η_saves;Ω = Ω,L= L)
+plot_pde_mag(fig,ax,param,density)
+display(fig)
 fig, ax = PyPlot.subplots(figsize =(10, 10))
-ax.plot(y)
+plot_pde_mass(fig,ax,param,density)
 display(fig)
-#testing
-param = pde_param()
-density = initialize_density(param)
-
-@profview fast_U_xyθ(param, density);
-@profview fast_F_xyθ(param, density);
-@profview pde_step!(param, density);
-
-@time fast_U_xyθ(param, density);
-@time fast_F_xyθ(param, density);
-@time pde_step!(param, density)
-
-@unpack λ, Nx, Nθ, Ω, S,  E, Y= param
-@unpack fa, fp, ρ, m, t = density
-@time afast_U(param, density);
-@profview tfast_U(fa, fp, ρ, m, t, λ, Nx, Nθ);
+#
+fig, ax = PyPlot.subplots(figsize =(10, 10))
+ax.plot(t_saves,dist_saves)
+display(fig)
 =#

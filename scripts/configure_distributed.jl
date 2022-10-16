@@ -22,7 +22,7 @@ ssh refract
 exit
 =#
 addprocs([("cherry",:auto)])
-addprocs([("cyllene")])
+addprocs([("cyllene",:auto)])
 addprocs([("orthosie")])
 addprocs([("refract",:auto)])
 
