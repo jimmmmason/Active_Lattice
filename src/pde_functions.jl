@@ -27,6 +27,7 @@ end
 function fast_U_xyθ(param::Dict{String,Any}, density::Dict{String,Any})
     @unpack λ, Nx, Nθ, S, E = param
     logtol::Float64 = log(1e-10);
+    #logtol = log(1e-10);
     Ua = Array{Float64,4}(undef, Nx, Nx, Nθ,2);
     Up = Array{Float64,3}(undef, Nx, Nx,2);
     Uθ = Array{Float64,3}(undef, Nx, Nx, Nθ);
@@ -43,17 +44,19 @@ function fast_U_xyθ(param::Dict{String,Any}, density::Dict{String,Any})
         m[a,b,d] := fa[a,b,θ]*eθ[θ,d]
     end
     ρ = fp + sum(fa; dims =3)[:,:,1].*(2*π/Nθ)
+    α = π/2 -1;
+
 
     logmρa = map(x -> (x>0 ? log(x) : logtol), fa);
     logmρp = map(x -> (x>0 ? log(x) : logtol), fp);
     logmρ = map(x -> (x>0 ? log(x) : logtol), 1 .- ρ);
+    dₛ = ( -ρ .+1).*( α*(2*α-1)/(2*α+1)*ρ.^2 + α*ρ .+1);
+    Dρ = DD.(ρ, dₛ)
+    Sρ = SS.(ρ, dₛ)
 
     Ua  = zeros(Nx,Nx,Nθ, 2);
     Up  = zeros(Nx,Nx,2);
     Uθ  = zeros(Nx,Nx,Nθ);
-
-    α = π/2 -1
-    dₛ = ( -ρ .+1).*( α*(2*α-1)/(2*α+1)*ρ.^2 + α*ρ .+1)
 
     for x₁ in 1:Nx, x₂ in 1:Nx
         local dsx, ρx, magx, y₁,y₂
@@ -63,22 +66,23 @@ function fast_U_xyθ(param::Dict{String,Any}, density::Dict{String,Any})
         dsx  = (dₛ[x₁,x₂]+dₛ[y₁,y₂])/2
         ρx   = (ρ[x₁,x₂] +ρ[y₁,y₂])/2
         magx = (m[y₁,y₂,:] +m[x₁,x₂,:])/2
-        if ρx == 0.
-        else
-            Ua[x₁,x₂,:,2] = dsx*(- Nx*(  logmρa[y₁,y₂,:])-Nx*(logmρa[x₁,x₂,:]) + λ*(eθ[:,2]) ) .+ (((1-dsx)/ρx) * ( Nx*( logmρ[y₁,y₂] -logmρ[x₁,x₂]))+((1-ρx-dsx)/ρx) * (λ*E[2] ⋅ magx))
-            Up[x₁,x₂,2] = dsx*(- Nx*( logmρp[y₁,y₂] ) - Nx*( logmρp[x₁,x₂] )) + (((1-dsx)/ρx) * (Nx*( logmρ[y₁,y₂] -logmρ[x₁,x₂]))+((1-ρx-dsx)/ρx) * (λ*E[2] ⋅ magx))
-        end
+        Dx = (Dρ[x₁,x₂] +Dρ[y₁,y₂])/2
+        Sx = (Sρ[x₁,x₂] +Sρ[y₁,y₂])/2
+
+        Ua[x₁,x₂,:,2] = dsx*(- Nx*(  logmρa[y₁,y₂,:] - logmρa[x₁,x₂,:]) + λ*(eθ[:,2]) ) .+ ( Dx*(-Nx*( logmρ[y₁,y₂] - logmρ[x₁,x₂])) + Sx*(λ*E[2] ⋅ magx))
+        Up[x₁,x₂,2] = dsx*(- Nx*( logmρp[y₁,y₂] - logmρp[x₁,x₂] )) + Dx * (-Nx*( logmρ[y₁,y₂] - logmρ[x₁,x₂])) + Sx * (λ*E[2] ⋅ magx)
+        
         ## 1 direction 
         y₁ = (x₁ +Nx)%Nx +1
         y₂ = x₂
         dsx  = (dₛ[x₁,x₂]+dₛ[y₁,y₂])/2
         ρx   = (ρ[x₁,x₂] +ρ[y₁,y₂])/2
         magx = (m[y₁,y₂,:] + m[x₁,x₂,:])/2
-        if ρx == 0.
-        else
-            Ua[x₁,x₂,:,2] = dsx*(- Nx*(  logmρa[y₁,y₂,:])-Nx*(logmρa[x₁,x₂,:]) + λ*(eθ[:,1]) ) .+ (((1-dsx)/ρx) * ( Nx*( logmρ[y₁,y₂] -logmρ[x₁,x₂]))+((1-ρx-dsx)/ρx) * (λ*E[1] ⋅ magx))
-            Up[x₁,x₂,2] = dsx*(- Nx*( logmρp[y₁,y₂] ) - Nx*( logmρp[x₁,x₂] )) + (((1-dsx)/ρx) * (Nx*( logmρ[y₁,y₂] -logmρ[x₁,x₂]))+((1-ρx-dsx)/ρx) * (λ*E[1] ⋅ magx))
-        end
+        Dx = (Dρ[x₁,x₂] +Dρ[y₁,y₂])/2
+        Sx = (Sρ[x₁,x₂] +Sρ[y₁,y₂])/2
+
+        Ua[x₁,x₂,:,1] = dsx*( -Nx*(  logmρa[y₁,y₂,:] - logmρa[x₁,x₂,:]) + λ*(eθ[:,1]) ) .+ ( Dx*(-Nx*( logmρ[y₁,y₂] - logmρ[x₁,x₂])) + Sx*(λ*E[1] ⋅ magx) )
+        Up[x₁,x₂,1] = dsx*( -Nx*( logmρp[y₁,y₂] - logmρp[x₁,x₂])) + Dx*(-Nx*( logmρ[y₁,y₂] - logmρ[x₁,x₂])) + Sx*(λ*E[1] ⋅ magx)
     end
     ## theta diection
     for θ ∈ S
@@ -86,6 +90,14 @@ function fast_U_xyθ(param::Dict{String,Any}, density::Dict{String,Any})
         Uθ[:,:,θ] = -Nθ*( logmρa[:,:,ϕ] - logmρa[:,:,θ] )/(2*π)
     end
     return Ua, Up, Uθ
+end
+
+function DD(rho,ds)
+   return (rho>0 ? (1-ds)/rho : 0)
+end
+
+function SS(rho,ds)
+    return (rho>0 ? (1-rho-ds)/rho : 0)
 end
 
 function fast_F_xyθ(param::Dict{String,Any}, density::Dict{String,Any})
@@ -126,7 +138,7 @@ function fast_F_xyθ(param::Dict{String,Any}, density::Dict{String,Any})
     a::Float64 = maximum(abs.(Ua));
     b::Float64= maximum(abs.(Up));
     c::Float64 = maximum(abs.(Uθ));
-    tempu::Float64 = 1/(6*max(a*Nx, b*Nx, c*Nθ));
+    tempu::Float64 = 1/(6*max(a*Nx, b*Nx, c*Nθ*Dθ/(2*π)));
     return Fa, Fp, Fθ, tempu
 end
 
@@ -188,9 +200,9 @@ function run_pde_until!(param::Dict{String,Any},density::Dict{String,Any},T; sav
             end
     else
         steps ::Int64 = 0
-        while (density["t"] < T)&&(steps < max_steps)
+        while (density["t"] < T)&(steps < max_steps)
             time_since_save = 0.
-            while time_since_save < min(save_interval, T)
+            while (time_since_save < min(save_interval, T))&(steps < max_steps)
                 dt = pde_step!(param,density)
                 time_since_save += dt 
                 steps += 1
@@ -206,7 +218,7 @@ function run_pde_until!(param::Dict{String,Any},density::Dict{String,Any},T; sav
 end
 
 function perturb_pde!(param::Dict{String,Any}, density::Dict{String,Any}; δ = 0.01, n2 = 2)
-    @unpack Nx, S, ρa, ρp, λ, Dθ = param
+    @unpack Nx, S, ρa, ρp, λ, Dθ, Nx, Nθ = param
     @unpack fa = density
     δ = min(δ, 1 - ρa - ρp);
     #from stability: 
@@ -217,7 +229,7 @@ function perturb_pde!(param::Dict{String,Any}, density::Dict{String,Any}; δ = 0
     β = 1- ds;
     a = λ* ( (1-ρ-ds)/ρ - dsp) /2
     γ = -8*π^2
-    Λ = 1/2*(-Dθ - 4*γ*n2*π^2 + sqrt(1 + 8*n2*π^2*(β^2 + γ*(2*γ*n2*π^2 - 1))));
+    Λ = 1/2*(-Dθ + γ*β + sqrt(Dθ^2 + 2*Dθ*β*γ + (β*γ)^2 - 2*a^2*γ*ρa*ρ ) )
     C = 2*π*ρa*(ρa + ρp)/ (1 + Λ)
     P = (x,y,θ) -> δ*(cos(2*π*x/Nx)*cos(2*π*y/Nx) - C*(sin(2*π*x/Nx)*cos(2*π*y/Nx)*cos(2π*θ/Nθ) + sin(2*π*y/Nx)*cos(2*π*x/Nx)*sin(2π*θ/Nθ) ));
     # 
@@ -227,11 +239,11 @@ function perturb_pde!(param::Dict{String,Any}, density::Dict{String,Any}; δ = 0
     @pack! density = fa;
 end
 
-function perturb_pde_run(para; max_steps = 20000)
+function perturb_pde_run(para; max_steps = 20000, save_interval = 0.001)
     @unpack T = param
     density = initialize_density(param)
     perturb_pde!(param,density);
-    run_pde_until!(param,density,T; save_on = true, max_steps = max_steps, save_interval = 0.001)
+    run_pde_until!(param,density,T; save_on = true, max_steps = max_steps, save_interval = save_interval)
 end
 
 #visualise data
@@ -274,7 +286,7 @@ function animate_pdes(param,t_saves,pde_saves)
 end 
 
 function plot_pde_mag(fig::Figure, ax::PyObject, param::Dict{String,Any}, density::Dict{String,Any})
-    @unpack λ, Nx, Nθ, S= param
+    @unpack λ, Nx, Nθ, S, ρa, ρp= param
     @unpack fa, fp, t = density
     #fig, ax = PyPlot.subplots(figsize =(10, 10))
     #collect data
@@ -301,7 +313,7 @@ function plot_pde_mag(fig::Figure, ax::PyObject, param::Dict{String,Any}, densit
 end 
 
 function plot_pde_mass(fig::Figure, ax::PyObject, param::Dict{String,Any}, density::Dict{String,Any})
-    @unpack λ, Nx, Nθ, S= param
+    @unpack λ, Nx, Nθ, S, ρa, ρp= param
     @unpack fa, fp, t = density
     #fig, ax = PyPlot.subplots(figsize =(10, 10))
     #collect data
@@ -349,7 +361,7 @@ end
 #Example 
 #=
 #Parameters
-param = pde_param(λ = 100)
+param = pde_param(λ = 20, T = 0.003, name = "test7")
 density = initialize_density(param)
 perturb_pde!(param,density);
 #expand variables
@@ -358,26 +370,42 @@ perturb_pde!(param,density);
 #Run and save
 run_pde_until!(param,density,0.002; save_on = true, max_steps = 20, save_interval = 0.001)
 #for pmap
-param = pde_param(λ = 100, T = 0.003, name = "test6")
-perturb_pde_run(param; max_steps = 30)
+param = pde_param(λ = 0, T = 0.003, name = "test8")
+perturb_pde_run(param; max_steps = 60, save_interval = 0.0005)
 #Loading
-t_saves, fa_saves, fp_saves = load_pdes(param,0.003; save_interval = 0.001)
+t_saves, fa_saves, fp_saves = load_pdes(param,0.003; save_interval = 0.0005)
 dist_saves = time_dist_from_unif(param, fa_saves, fp_saves)
 #plotting
 fig, ax = PyPlot.subplots(figsize =(10, 10))
-n = 4
+density = initialize_density(param)
+n = 1#length(t_saves)
 t, fa, fp = t_saves[n], fa_saves[n], fp_saves[n]
 @pack! density = fa, fp, t
-fig, ax = PyPlot.subplots(figsize =(10, 10))
-plot_pde_mass(fig,ax,param,density)
-display(fig)
-plot_pde_mag(fig,ax,param,density)
-display(fig)
+#
+pde_step!(param,density)
 fig, ax = PyPlot.subplots(figsize =(10, 10))
 plot_pde_mass(fig,ax,param,density)
 display(fig)
 #
 fig, ax = PyPlot.subplots(figsize =(10, 10))
+plot_pde_mag(fig,ax,param,density)
+display(fig)
+#
+fig, ax = PyPlot.subplots(figsize =(10, 10))
 ax.plot(t_saves,dist_saves)
 display(fig)
+##
+pde_step!(param,density)
+@unpack fa, fp, t = density
+dist_from_unif(param,fa,fp)
+
+
+for x₂ in 1:Nx
+        local dsx, ρx, magx, y₁,y₂
+        ## 2 direction
+
+        y₂ = (x₂ +Nx)%Nx +1
+
+        println(y₂)
+end
 =#
