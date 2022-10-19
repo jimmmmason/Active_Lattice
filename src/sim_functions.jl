@@ -20,11 +20,11 @@ function uniform_initial_param(; name = "test", D =1. , λ =1. ,ρa = 0.1, ρp =
     end
     function rates(n,m,i)
         E = [[1,0],[0,1],[0,-1],[-1,0],]
-        if m[1]>0
-            return 0
-        elseif n[1]==0
+        if m[1]>0.
             return 0.
-        elseif n[2]==2
+        elseif n[1]==0.
+            return 0.
+        elseif n[2]==2.
             return L^2*D
         else
             return L^2*D + L*λ*E[i]⋅[cos(n[2]),sin(n[2])] 
@@ -50,9 +50,9 @@ function extra_mixing_initial_param(; name = "test", D =1. , λ =1. ,ρa = 0.1, 
         E = [[1,0],[0,1],[0,-1],[-1,0],]
         if n[1]== 0.
             return 0.
-        elseif (n[2]==2.)&(m[1]==0.)
+        elseif (n[1]==2.)&(m[1]==0.)
             return L^2*(D+γ) 
-        elseif (n[2]==1.)&(m[1]==0.)
+        elseif (n[1]==1.)&(m[1]==0.)
             return L^2*(D+γ) + L*λ*E[i]⋅[cos(n[2]),sin(n[2])] 
         elseif (m[1]> 0.)
             return L^2*γ
@@ -76,7 +76,7 @@ function initialize_model(param::Dict{String,Any})
         w = Weights(site_distribution[x₁, x₂ ])
         #fill model
         n = sample([0,1,2],w)
-        η[x₁, x₂, : ] = [n, angles(x,n)]
+        η[x₁, x₂, : ] = [n, angles([x₁, x₂],n)]
     end
     #fill rates and jumps
     for x₁ in 1:L, x₂ in 1:L 
@@ -106,8 +106,8 @@ function model_step!(param::Dict{String,Any},model::Dict{String,Any})
     @unpack η, j, t, α, Δτ, w = model
     #increase time
     K = round(α/round(Dθ/Δt))
-    Δt = round(Dθ*100)*K*Δτ  #roughly Δt
-    t += Δt
+    dt = round(Dθ/Δt)*K*Δτ  #roughly Δt
+    t += dt
     #see if jump occurs
     for _ in 1:round(Dθ*100)
         for _ in 1:K
@@ -138,7 +138,7 @@ function model_step!(param::Dict{String,Any},model::Dict{String,Any})
             end
         end
     end
-    Δτ = 0.01/α
+    Δτ = Δt/α
     @pack! param = Δτ
     @pack! model = η, w, t
 end
@@ -487,11 +487,8 @@ function density_hist(param::Dict{String,Any}, η::Array{Float64,3}; r = 2)
         local ρr 
         ρr = 0.
         for e ∈ E
-            y  = ([x₁, x₂] + E[i] +[L-1,L-1]) .% L + [1,1]
-            x = [x₁,x₂]
-            if (norm((x-y .+ L) .% L , Inf) ≤ r )|(norm((x-y .-L) .% L , Inf) ≤ r)|(norm((x-y + [-L,L]) .% L , Inf) ≤ r )|(norm((x-y + [L,-L]) .% L , Inf) ≤ r)
-                ρr += site_ρ(η[y₁, y₂,: ])/(2*r +1)^2
-            end
+            y₁, y₂  = ([x₁, x₂] + E[i] +[L-1,L-1]) .% L + [1,1]
+            ρr += site_ρ(η[y₁, y₂,: ])/(2*r +1)^2
         end
         push!(local_density,ρr) 
     end
