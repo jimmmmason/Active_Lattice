@@ -144,6 +144,14 @@ function model_step!(param::Dict{String,Any},model::Dict{String,Any})
 end
 
 function run_model_until!(param::Dict{String,Any},model::Dict{String,Any},T; save_on =false)
+    if save_on
+        @unpack name, L, λ, γ, ρa, ρp, Δt, Dθ = param
+        @unpack η, t = model
+        filename = "/store/DAMTP/jm2386/Active_Lattice/data/sims_raw/$(name)/size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ)_Δt=$(Δt)_Dθ=$(Dθ)/time=$(round(t; digits = 2))_size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ)_Dθ=$(Dθ)/time=$(round(t; digits = 2))_size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ)_Dθ=$(Dθ).jld2";
+        data = Dict{String,Any}();
+        @pack! data = η, t
+        safesave(filename,data)
+    end
     while model["t"] < T 
         model_step!(param,model)
         if save_on
@@ -174,11 +182,46 @@ function run_and_dump_sim(param::Dict{String,Any},model::Dict{String,Any},T; dum
 end
 
 function run_sim(param)
-    @unpack T = param
+    @unpack T, Δt = param
+    model = initialize_model(param);
+    println("starting run: γ = $(param["γ"]), ρ = $(param["ρa"]), λ = $(param["λ"])")
+    s = 50*Δt
+    while s<T 
+        try
+            t = s
+            @unpack name, L, λ, γ, ρa, ρp, Δt, Dθ = param
+            filename = "/store/DAMTP/jm2386/Active_Lattice/data/sims_raw/$(name)/size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ)_Δt=$(Δt)_Dθ=$(Dθ)/time=$(round(t; digits = 2))_size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ)_Dθ=$(Dθ)/time=$(round(t; digits = 2))_size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ)_Dθ=$(Dθ).jld2";
+            η, t = wload(filename, "η", "t")
+            c = zeros(L,L,4)
+            E = [[1,0],[0,1],[0,-1],[-1,0],]
+            for x₁ in 1:L, x₂ in 1:L 
+                for i in 1:4
+                    #find adjacent site
+                    y₁, y₂  = ([x₁, x₂] + E[i] +[L-1,L-1]) .% L + [1,1]
+                    #fill rates 
+                    c[x₁, x₂ ,i] = rates(η[x₁, x₂,: ],η[y₁, y₂,: ],i)
+                end
+            end
+            #pack into model
+            w    = weights( [(c...)...])
+            @pack! model = η, w, t 
+            println("loaded t = $(t)")
+        catch
+            println("load t = $(s) failed")
+            s = T
+        end
+        s+= 50*Δt
+    end 
+    run_model_until!(param, model, T; save_on = true);
+    println("success: γ = $(param["γ"]), ρ = $(param["ρa"]), λ = $(param["λ"])")
+end
+
+function run_sim_old(param)
+    @unpack T, Δt = param
     model = initialize_model(param);
     println("starting run: γ = $(param["γ"]), ρ = $(param["ρa"]), λ = $(param["λ"])")
     run_model_until!(param, model, T; save_on = true);
-    println("success")
+    println("success: γ = $(param["γ"]), ρ = $(param["ρa"]), λ = $(param["λ"])")
 end
 
 function load_etas(param::Dict{String,Any},T; dump_interval = 0.01, start_time= 0.)
@@ -482,12 +525,12 @@ end
 function density_hist(param::Dict{String,Any}, η::Array{Float64,3}; r = 2) 
     @unpack name, L, λ, γ, ρa, ρp,  E, Δt, site_distribution, angles, rates = param
     local_density = []
-    E = [[i,j] for i in (-r):1:r for j in (-r):1:r ]
+    B = [[i,j] for i in (-r):1:r for j in (-r):1:r ]
     for x₁ in 1:L, x₂ in 1:L
         local ρr 
         ρr = 0.
-        for e ∈ E
-            y₁, y₂  = ([x₁, x₂] + E[i] +[L-1,L-1]) .% L + [1,1]
+        for e ∈ B
+            y₁, y₂  = ([x₁, x₂] + e +[L-1,L-1]) .% L + [1,1]
             ρr += site_ρ(η[y₁, y₂,: ])/(2*r +1)^2
         end
         push!(local_density,ρr) 
@@ -500,7 +543,8 @@ function time_density_hist(fig::Figure, ax::PyObject, param::Dict{String,Any}, t
     for η ∈ η_saves
         append!(h, density_hist(param, η; r = r));
     end
-    ax.hist(h; bins = bins, histtype = "step", density = true)
+    edges = collect((-1/(2*bins)):(1/(bins)):(1+1/(2*bins)))
+    ax.hist(h; bins = edges, histtype = "step", density = true)
     ax.xaxis.set_ticks(0:0.5:1)
 end
 
@@ -543,7 +587,7 @@ end
 #=
 #Parameters
 param = uniform_initial_param(L=32, λ = 16, ρa = 0.9, ρp = 0.0, Δt = 0.01)
-param = extra_mixing_initial_param(L=32, λ = 16, ρa = 0.7, ρp = 0.0, Δt = 0.01, γ = 0.00, T = 0.02)
+param = extra_mixing_initial_param(name = "test10", L=32, λ = 16, ρa = 0.7, ρp = 0.0, Δt = 0.01, γ = 0.00, T = 2.2)
 
 run_sim(param)
 model = initialize_model(param)
@@ -588,5 +632,9 @@ display(fig)
 "/store/DAMTP/jm2386/Active_Lattice/data/sims_raw/$(name)/size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ)_Δt=$(Δt)_Dθ=$(Dθ)/time=$(round(t; digits = 5))_size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ)_Dθ=$(Dθ)/time=$(round(t; digits = 5))_size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ)_Dθ=$(Dθ).jld2";
 #
 
+fig, ax = PyPlot.subplots(figsize =(10, 10))
+h =  density_hist(param, η; r= 5)
+ax.hist(h; bins = 1000)
+fig
 =#
 
