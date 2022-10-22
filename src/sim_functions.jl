@@ -260,17 +260,17 @@ function animate_etas(param,t_saves,η_saves)
     myanim[:save](filename, bitrate=-1, dpi= 100, extra_args=["-vcodec", "libx264", "-pix_fmt", "yuv420p"])
 end
 
-function plot_eta(fig::Figure, ax::PyObject, param::Dict{String,Any}, t::Float64, η::Array{Float64,3}; title = true)
+function plot_eta(fig::Figure, ax::PyObject, param::Dict{String,Any}, t::Float64, η::Array{Float64,3}; title = true, r =5)
     @unpack name, L, λ, γ, ρa, ρp, E, Δt, site_distribution, angles, rates = param
     ax.clear()
     #collect data
-    y = [32,32]-indexmin(local_polarisation(η, L; r = 3))
+    y = [Int64(L/2),Int64(L/2)]-indexmin(local_polarisation(η, L; r = 3))
     η = translate_η(η, L, y)
     passive, active, directions, polarisations = extract_points_v2(η,L)
     dx = cos.(directions)
     dy = sin.(directions)
     t = round(t; digits=5)
-    Φ = round(translation_invariance(η;Ω = Ω,L= L); digits =4)
+    Φ = round(translation_invariance(η;L= L); digits =4)
     #figure configuration
     ax.xaxis.set_ticks([])
         ax.yaxis.set_ticks([])
@@ -510,7 +510,7 @@ function site_θ(ηx::Array{Float64,1})
     end
 end
 
-function fourier_config(η::Array{Float64,3}; Ω::Array{Array{Int64,1},1}= [],L::Int64 = 1, k::Vector{Float64}=[0,0])
+function fourier_config(η::Array{Float64,3};L::Int64 = 1, k::Vector{Float64}=[0,0])
     ϕLL = 0.
     for x₁ in 1:L, x₂ in 1:L
         ϕLL += ( 1-site_ρ(η[x₁, x₂,: ]))*exp(- im* k⋅ [x₁,x₂] )
@@ -518,8 +518,8 @@ function fourier_config(η::Array{Float64,3}; Ω::Array{Array{Int64,1},1}= [],L:
     return ϕLL/L^2
 end
 
-function translation_invariance(η::Array{Float64,3}; Ω::Array{Array{Int64,1},1}= [],L::Int64 = 1)
-    return norm(fourier_config(η; Ω = Ω, L= L, k =[2*π/L,0.]))+norm(fourier_config(η; Ω = Ω, L= L, k =[0.,2*π/L]))
+function translation_invariance(η::Array{Float64,3};L::Int64 = 1)
+    return norm(fourier_config(η; L= L, k =[2*π/L,0.]))+norm(fourier_config(η; L= L, k =[0.,2*π/L]))
 end
 
 function density_hist(param::Dict{String,Any}, η::Array{Float64,3}; r = 2) 

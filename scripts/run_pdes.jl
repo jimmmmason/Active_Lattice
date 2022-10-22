@@ -7,16 +7,16 @@ include("/home/jm2386/Active_Lattice/src/pde_functions.jl")
 
 #varying parameters
 params = []
-name = "high_density_stability"
-for ρ in [0.95, 0.96, 0.97, 0.98, 0.99]
-for λ in [20, 30, 40, 50, 60]
+name = "high_density_stability_v2"
+for ρ in [0.9, 0.92, 0.94, 0.96, 0.98]
+for λ in [10, 20, 30, 40, 50]
         local param
-        param = pde_param(; name = name, λ = λ , ρa = ρ, ρp = 0., T = 0.3 )
+        param = pde_param(; name = name, λ = λ , ρa = ρ, ρp = 0., T = 0.4 )
         push!(params,param)
 end
 end
 #run pdes
-pmap(pde_run, params; distributed = true, batch_size=1, on_error=nothing,)
+pmap(perturb_pde_run, params; distributed = true, batch_size=1, on_error=nothing,)
 #plot pde 
 # /store/DAMTP/jm2386/Active_Lattice/data/pde_raw/
 t_saves, fa_saves, fp_saves = load_pdes(param,0.2; save_interval = 0.001)

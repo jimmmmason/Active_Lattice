@@ -58,29 +58,33 @@ PyPlot.close()
 fig = figure(figsize=(10,10))
 i =1
 name = "cross_density_hist_data_4"
-t = 1.0
+t = 2.0
+L = 128
+r = 7
 for ρ in [0.8]
-for λ in [12,14,16,18]
+for λ in [10, 12,14,16]
     ax = fig[:add_subplot](2,2,i)
-    param = extra_mixing_initial_param(; name = name, λ = λ ,ρa = ρ, ρp = 0., L=64, Δt = 0.01, γ = 0., T = 1.0)
+    param = extra_mixing_initial_param(; name = name, λ = λ ,ρa = ρ, ρp = 0., L=L, Δt = 0.01, γ = 0., T = 1.0)
     @unpack name, L, λ, γ, ρa, ρp, Δt, Dθ = param
     filename = "/store/DAMTP/jm2386/Active_Lattice/data/sims_raw/$(name)/size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ)_Δt=$(Δt)_Dθ=$(Dθ)/time=$(round(t; digits = 2))_size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ)_Dθ=$(Dθ)/time=$(round(t; digits = 2))_size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ)_Dθ=$(Dθ).jld2";
     η, t = wload(filename, "η", "t")
-    plot_eta(fig,ax,param, t, η; title = false)
+    plot_eta(fig,ax,param, t, η; title = false, r = r)
     #h = density_hist(fig,ax,param, t, η; title = false)
     i += 1
-    if λ == 12
+    #=
+    if λ == 8
         ax.yaxis.set_ticks(0:0.5:1)
         ax.set_ylabel("ρ = $(ρ)")
     end
+    =#
     if ρ == 0.8
         ax.xaxis.set_ticks(0:0.5:1)
-        ax.set_xlabel("v₀ = $(λ)")
+        ax.set_xlabel("v₀ = $(λ), ρ = $(ρ)")
     end
 end
 end
 display(fig)
-PyPlot.savefig("pic_phase_sep_parameter_range.pdf",dpi = 300, format = "pdf")
+PyPlot.savefig("pic_phase_sep_parameter_range_L=$(L).pdf",dpi = 300, format = "pdf")
 # hist plot 
 PyPlot.close()
 fig = figure(figsize=(10,10))
@@ -88,24 +92,27 @@ i = 1
 name = "cross_density_hist_data_4"
 t_start = 1.0
 t_end = 3.0
+L = 128
+r = 7
 for ρ in [0.8]
-for λ in [12,14,16,18]
+for λ in [10, 12,14,16]
     ax = fig[:add_subplot](2,2,i)
-    param = extra_mixing_initial_param(; name = name, λ = λ ,ρa = ρ, ρp = 0., L=64, Δt = 0.01, γ = 0., T = 3.0)
+    param = extra_mixing_initial_param(; name = name, λ = λ ,ρa = ρ, ρp = 0., L=L, Δt = 0.01, γ = 0., T = 3.0)
     t_saves , η_saves = load_etas(param, t_end; dump_interval = 0.1, start_time = t_start);
-    r = 6
     time_density_hist(fig, ax, param, t_saves, η_saves; r = r, bins = (2*r+1)^2 )
+    #=
     if λ == 12
         ax.set_ylabel("ρ = $(ρ)")
     end
+    =#
     if ρ == 0.8
-        ax.set_xlabel("v₀ = $(λ)")
+        ax.set_xlabel("v₀ = $(λ), ρ = $(ρ)")
     end
     i += 1
 end
 end
 display(fig)
-PyPlot.savefig("hist_phase_sep_parameter_range.png",dpi = 300, format = "png")
+PyPlot.savefig("hist_phase_sep_parameter_range_L=$(L).png",dpi = 300, format = "png")
 
 h = randn(100)
 fig, ax = PyPlot.subplots(figsize =(10, 10))

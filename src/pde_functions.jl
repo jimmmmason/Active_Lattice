@@ -24,155 +24,228 @@ function initialize_density(param::Dict{String,Any})
     return density
 end
 
-function fast_U_xyθ(param::Dict{String,Any}, density::Dict{String,Any})
-    @unpack λ, Nx, Nθ, S, E = param
-    logtol::Float64 = log(1e-10);
-    #logtol = log(1e-10);
-    Ua = Array{Float64,4}(undef, Nx, Nx, Nθ,2);
-    Up = Array{Float64,3}(undef, Nx, Nx,2);
-    Uθ = Array{Float64,3}(undef, Nx, Nx, Nθ);
-    logmρa = Array{Float64,3}(undef, Nx, Nx, Nθ);
-    logmρp = Array{Float64,2}(undef, Nx, Nx);
-    logmρp = Array{Float64,2}(undef, Nx, Nx);
-    ρ = Array{Float64,2}(undef, Nx, Nx);
-    m = Array{Float64,3}(undef, Nx, Nx, 2);
-    eθ = Array{Float64,2}(undef, Nθ, 2);
-    @unpack fa, fp = density
+## 
 
-    eθ = [cos.(S*2π/Nθ) sin.(S*2π/Nθ)]
-    @tensor begin
-        m[a,b,d] := fa[a,b,θ]*eθ[θ,d]
-    end
-    ρ = fp + sum(fa; dims =3)[:,:,1].*(2*π/Nθ)
-    α = π/2 -1;
+function midpoint_bond_diff(f::Array{Float64,2}; Nx::Int64 = 100) 
 
-
-    logmρa = map(x -> (x>0 ? log(x) : logtol), fa);
-    logmρp = map(x -> (x>0 ? log(x) : logtol), fp);
-    logmρ = map(x -> (x>0 ? log(x) : logtol), 1 .- ρ);
-    dₛ = ( -ρ .+1).*( α*(2*α-1)/(2*α+1)*ρ.^2 + α*ρ .+1);
-    Dρ = DD.(ρ, dₛ)
-    Sρ = SS.(ρ, dₛ)
-
-    Ua  = zeros(Nx,Nx,Nθ, 2);
-    Up  = zeros(Nx,Nx,2);
-    Uθ  = zeros(Nx,Nx,Nθ);
+    grad_f::Array{Float64,3} = zeros(2, Nx, Nx)
 
     for x₁ in 1:Nx, x₂ in 1:Nx
-        local dsx, ρx, magx, y₁,y₂
+        ## 1 direction
+        y₁ ::Int64 = (x₁ +Nx)%Nx +1
+        y₂ ::Int64 = x₂
+        grad_f[1,x₁,x₂] = Nx*( f[y₁,y₂] - f[x₁,x₂] )
         ## 2 direction
         y₁ = x₁
         y₂ = (x₂ +Nx)%Nx +1
-        dsx  = (dₛ[x₁,x₂]+dₛ[y₁,y₂])/2
-        ρx   = (ρ[x₁,x₂] +ρ[y₁,y₂])/2
-        magx = (m[y₁,y₂,:] +m[x₁,x₂,:])/2
-        Dx = (Dρ[x₁,x₂] +Dρ[y₁,y₂])/2
-        Sx = (Sρ[x₁,x₂] +Sρ[y₁,y₂])/2
-
-        Ua[x₁,x₂,:,2] = dsx*(- Nx*(  logmρa[y₁,y₂,:] - logmρa[x₁,x₂,:]) + λ*(eθ[:,2]) ) .+ ( Dx*(-Nx*( logmρ[y₁,y₂] - logmρ[x₁,x₂])) + Sx*(λ*E[2] ⋅ magx))
-        Up[x₁,x₂,2] = dsx*(- Nx*( logmρp[y₁,y₂] - logmρp[x₁,x₂] )) + Dx * (-Nx*( logmρ[y₁,y₂] - logmρ[x₁,x₂])) + Sx * (λ*E[2] ⋅ magx)
-        
-        ## 1 direction 
-        y₁ = (x₁ +Nx)%Nx +1
-        y₂ = x₂
-        dsx  = (dₛ[x₁,x₂]+dₛ[y₁,y₂])/2
-        ρx   = (ρ[x₁,x₂] +ρ[y₁,y₂])/2
-        magx = (m[y₁,y₂,:] + m[x₁,x₂,:])/2
-        Dx = (Dρ[x₁,x₂] +Dρ[y₁,y₂])/2
-        Sx = (Sρ[x₁,x₂] +Sρ[y₁,y₂])/2
-
-        Ua[x₁,x₂,:,1] = dsx*( -Nx*(  logmρa[y₁,y₂,:] - logmρa[x₁,x₂,:]) + λ*(eθ[:,1]) ) .+ ( Dx*(-Nx*( logmρ[y₁,y₂] - logmρ[x₁,x₂])) + Sx*(λ*E[1] ⋅ magx) )
-        Up[x₁,x₂,1] = dsx*( -Nx*( logmρp[y₁,y₂] - logmρp[x₁,x₂])) + Dx*(-Nx*( logmρ[y₁,y₂] - logmρ[x₁,x₂])) + Sx*(λ*E[1] ⋅ magx)
+        grad_f[2,x₁,x₂] = Nx*( f[y₁,y₂] - f[x₁,x₂] ) 
     end
-    ## theta diection
-    for θ ∈ S
-        ϕ = ((θ % Nθ) +1)
-        Uθ[:,:,θ] = -Nθ*( logmρa[:,:,ϕ] - logmρa[:,:,θ] )/(2*π)
-    end
-    return Ua, Up, Uθ
+    return grad_f
 end
 
-function DD(rho,ds)
-   return (rho>0 ? (1-ds)/rho : 0)
-end
+function midpoint_bond_diff_θ(f::Array{Float64,3}; Nx::Int64 = 100,  Nθ::Int64 = 100) 
 
-function SS(rho,ds)
-    return (rho>0 ? (1-rho-ds)/rho : 0)
-end
+    grad_f::Array{Float64,4} = zeros(2, Nx, Nx, Nθ)
 
-function fast_F_xyθ(param::Dict{String,Any}, density::Dict{String,Any})
-    @unpack Nx, Nθ, S= param
-    Ua = Array{Float64,4}(undef, Nx, Nx, Nθ,2);
-    Up = Array{Float64,3}(undef, Nx, Nx,2);
-    Uθ = Array{Float64,3}(undef, Nx, Nx, Nθ);
-    Fa = Array{Float64,4}(undef, Nx, Nx, Nθ,2);
-    Fp = Array{Float64,3}(undef, Nx, Nx,2);
-    Fθ = Array{Float64,3}(undef, Nx, Nx, Nθ);
-    fa = Array{Float64,3}(undef, Nx, Nx, Nθ);
-    fp = Array{Float64,2}(undef, Nx, Nx);
-    @unpack fa, fp = density
-
-    Fa = zeros(Nx,Nx,Nθ, 2);
-    Fp = zeros(Nx,Nx,2);
-    Fθ  = zeros(Nx,Nx,Nθ);
-
-    Ua, Up, Uθ = fast_U_xyθ(param, density)
     for x₁ in 1:Nx, x₂ in 1:Nx
-        local y₁,y₂
+        ## 1 direction
+        y₁ ::Int64 = (x₁ +Nx)%Nx +1
+        y₂ ::Int64 = x₂
+        grad_f[1,x₁,x₂,:] = Nx*( f[y₁,y₂,:] - f[x₁,x₂,:] )
         ## 2 direction
-        y₁::Int64 = x₁
-        y₂::Int64= (x₂ +Nx)%Nx +1
-        Fa[x₁,x₂,:,2] = max.(0., Ua[x₁,x₂,:,2] ).*fa[x₁,x₂,:] + min.(0.,Ua[x₁,x₂,:,2]).*fa[y₁,y₂,:]
-        Fp[x₁,x₂,2]   = max.(0.,Up[x₁,x₂,2]).*fp[x₁,x₂] + min.(0.,Up[x₁,x₂,2]).*fp[y₁,y₂]
+        y₁ = x₁
+        y₂ = (x₂ +Nx)%Nx +1
+        grad_f[2,x₁,x₂,:] = Nx*( f[y₁,y₂,:] - f[x₁,x₂,:] ) 
+    end
+    return grad_f
+end
+
+function site_div(f::Array{Float64,3}; Nx::Int64 = 100) 
+
+    div_f::Array{Float64,2} = zeros(Nx, Nx)
+
+    for x₁ in 1:Nx, x₂ in 1:Nx
+        ## 1 direction
+        y₁ ::Int64 = (x₁ +Nx)%Nx +1
+        y₂ ::Int64 = x₂
+        div_f[x₁,x₂] = Nx*( f[1,y₁,y₂] - f[1,x₁,x₂] )
+        ## 2 direction
+        y₁ = x₁
+        y₂ = (x₂ +Nx)%Nx +1
+        div_f[x₁,x₂] = Nx*( f[2,y₁,y₂] - f[2,x₁,x₂] ) 
+    end
+    return div_f
+end
+
+function site_div_θ(f::Array{Float64,4}; Nx::Int64 = 100,  Nθ::Int64 = 100) 
+
+    div_f::Array{Float64,3} = zeros(Nx, Nx, Nθ)
+
+    for x₁ in 1:Nx, x₂ in 1:Nx
+        ## 1 direction
+        y₁ ::Int64 = (x₁ +Nx)%Nx +1
+        y₂ ::Int64 = x₂
+        div_f[y₁,y₂,:] = Nx*( f[1,y₁,y₂,:] - f[1,x₁,x₂,:] )
+        ## 2 direction
+        y₁ = x₁
+        y₂ = (x₂ +Nx)%Nx +1
+        div_f[y₁,y₂,:] = Nx*( f[2,y₁,y₂,:] - f[2,x₁,x₂,:] ) 
+    end
+
+    return div_f
+end
+
+function site_θ_diff(f::Array{Float64,3}; Nx::Int64 = 100,  Nθ::Int64 = 100) 
+
+    div_f::Array{Float64,3} = zeros(Nx, Nx, Nθ)
+
+    for θ in 1:Nθ
+        ϕ ::Int64 = ((θ % Nθ) +1)
+        div_f[:,:,ϕ] += Nθ*(f[:,:,ϕ]-f[:,:,θ])/(2*π)
+    end
+
+    return div_f
+end
+
+function midpoint_bond_av(f::Array{Float64,3}; dims =2, Nx::Int64 = 100) 
+    av_f::Array{Float64,3}= zeros(2, Nx, Nx)
+
+    for x₁ in 1:Nx, x₂ in 1:Nx
         ## 1 direction
         y₁ = (x₁ +Nx)%Nx +1
         y₂ = x₂
-        Fa[x₁,x₂,:,1] = max.(0., Ua[x₁,x₂,:,1] ).*fa[x₁,x₂,:] + min.(0.,Ua[x₁,x₂,:,1]).*fa[y₁,y₂,:]
-        Fp[x₁,x₂,1]   = max.(0.,Up[x₁,x₂,1]).*fp[x₁,x₂] + min.(0.,Up[x₁,x₂,1]).*fp[y₁,y₂]
+        av_f[1,x₁,x₂] = ( f[1,y₁,y₂] + f[1,x₁,x₂] )/2
+        ## 2 direction
+        y₁ = x₁
+        y₂ = (x₂ +Nx)%Nx +1
+        av_f[2,x₁,x₂] = ( f[2,y₁,y₂] + f[2,x₁,x₂] )/2
     end
-    for θ ∈ S
+    return av_f
+end
+
+function midpoint_Θ_diff(f::Array{Float64,3}; Nx::Int64 = 100,  Nθ::Int64 = 100) 
+    grad_f::Array{Float64,3} = zeros(Nx, Nx, Nθ)
+
+    for θ in 1:Nθ
+        ϕ = ((θ % Nθ) +1)
+        grad_f[:,:,θ] = Nθ*( f[:,:,ϕ] - f[:,:,θ] )/(2*π)
+    end
+    return grad_f
+end
+
+##
+
+function self_diff(ρ::Float64)
+    α::Float64= π/2 -1;
+    return ( 1-ρ).*( α*(2*α-1)/(2*α+1)*ρ^2 - α*ρ +1)
+end
+
+function mag(f::Array{Float64,3}; Nθ = 50, Nx =100)
+    eθ::Array{Float64,2} = [cos.((1:Nθ)*2π/Nθ) sin.((1:Nθ)*2π/Nθ)];
+    m = Array{Float64,3}(undef, 2, Nx, Nx);
+    @tensor begin
+        m[d,a,b] := f[a,b,θ]*eθ[θ,d]
+    end
+    return 2*π*m/Nθ
+end
+
+function coeff_s(rho::Float64,ds::Float64)
+    return (rho>0 ? (1-rho-ds)/(rho*ds) : 0)
+end
+
+function coeff_mag_s(f::Array{Float64,3},ρ::Array{Float64,2}; Nθ::Int64 = Nθ,  Nx::Int64 = Nx)
+    m    ::Array{Float64,3} = mag(f; Nθ=Nθ, Nx=Nx );
+    ds   ::Array{Float64,2} = self_diff.(ρ);
+    s    ::Array{Float64,3} = reshape(coeff_s.(ρ,ds),1,Nx,Nx);
+    mag_s::Array{Float64,3} = s.*m
+    return mag_s
+end
+
+function p(x::Float64)
+    return -(π-1)*log(1-x)   + real(  -   ( (4 -5*π +π^2)*sqrt( Complex( (π-2)/( -26 +37*π -12π^2 +π^3 )) )*atanh( sqrt( Complex( (π-2)/( -26 +37*π -12π^2 +π^3 )) )*( 1 -6*x + π*(-1+2*x) )))   +    (1/2)*(-2 + π)*log( -2 -2*x + π^2(-1+x)*x + 6*x^2 + π*(2 +3*x -5x^2))     )
+end
+
+function mob(fa::Array{Float64,3}, fp::Array{Float64,2}, ρ::Array{Float64,2})
+    ds::Array{Float64,2} = self_diff.(ρ)
+    return fa.*ds, fp*ds, fa
+end
+
+function upwind(U::Float64, mb_down::Float64, mb_up::Float64)
+    return (U   > 0. ? U.*mb_down  : U*mb_up)
+end
+
+##
+
+function U_apθ(fa::Array{Float64,3}, fp::Array{Float64,2}, ρ::Array{Float64,2}; Nx::Int64 =100, Nθ::Int64 =100, λ::Float64 = 10.)
+    logtol::Float64 = log(1e-10);
+
+    eθ:: Array{Float64,4} = reshape([cos.(S*2π/Nθ) sin.(S*2π/Nθ)],2,1,1,Nθ)
+
+    logmfa::Array{Float64,3} = map(x -> (x>0 ? log(x) : logtol), fa);
+    logmfp::Array{Float64,2} = map(x -> (x>0 ? log(x) : logtol), fp);
+    p_rho ::Array{Float64,2} = p.(ρ)
+
+    Ua::Array{Float64,4}  = -midpoint_bond_diff_θ(logmfa .+ p_rho; Nx=Nx, Nθ=Nθ) .+ λ*midpoint_bond_av(coeff_mag_s(fa,ρ; Nθ=Nθ, Nx=Nx ); Nx =Nx ) .+ λ*eθ 
+    Up::Array{Float64,3}  = -midpoint_bond_diff(  logmfp  + p_rho; Nx=Nx       )  + λ*midpoint_bond_av(coeff_mag_s(fa,ρ; Nθ=Nθ, Nx=Nx ); Nx =Nx )
+    Uθ::Array{Float64,3}  = -midpoint_Θ_diff(fa; Nx=Nx, Nθ = Nθ)
+
+    return Ua, Up, Uθ
+end
+
+function F_apθ(Ua::Array{Float64,4}, Up::Array{Float64,3}, Uθ::Array{Float64,3}, moba::Array{Float64,3}, mobp::Array{Float64,2}, mobθ::Array{Float64,3}; Nx::Int64 =100, Nθ::Int64 =100 )
+    Fa ::Array{Float64,4} = zeros(2,Nx,Nx,Nθ);
+    Fp ::Array{Float64,3} = zeros(2,Nx,Nx);
+    Fθ ::Array{Float64,3} = zeros(Nx,Nx,Nθ);
+    for x₁ in 1:Nx, x₂ in 1:Nx
+        local y₁,y₂
+        ## 1 direction
+        y₁ ::Int64 = (x₁ +Nx)%Nx +1
+        y₂ ::Int64 = x₂
+        Fa[1,x₁,x₂,:] = upwind.(Ua[1,x₁,x₂,:], moba[x₁,x₂,:], moba[y₁,y₂,:])
+        Fp[1,x₁,x₂]   = upwind( Up[1,x₁,x₂]  , fp[x₁,x₂],   fp[y₁,y₂]  )
+        ## 2 direction
+        y₁ = x₁
+        y₂ = (x₂ +Nx)%Nx +1
+        Fa[2,x₁,x₂,:] = upwind.(Ua[2,x₁,x₂,:], moba[x₁,x₂,:], moba[y₁,y₂,:])
+        Fp[2,x₁,x₂]   = upwind( Up[2,x₁,x₂]  , mobp[x₁,x₂],   mobp[y₁,y₂]  )
+    end
+    for θ in 1:Nθ
         local ϕ 
         ϕ::Int64 = ((θ % Nθ) +1)
-        Fθ[:,:,θ] = max.(0.,Uθ[:,:,θ]).*fa[:,:,θ] + min.(0.,Uθ[:,:,θ]).*fa[:,:,ϕ]
+        Fθ[:,:,θ] = upwind.(Uθ[:,:,θ], fa[:,:,θ], fa[:,:,ϕ])
     end
+    return Fa, Fp, Fθ
+end
+
+##
+
+function time_step(fa::Array{Float64,3}, fp::Array{Float64,2}; Nx::Int64 =100, Nθ::Int64 =100, λ::Float64 = 10., Dθ::Float64 = 10.)
+    ρ::Array{Float64,2} = fp + sum(fa; dims =3)[:,:,1].*(2*π/Nθ)
+    
+    Ua::Array{Float64,4},   Up::Array{Float64,3},   Uθ::Array{Float64,3}   = U_apθ(fa,fp,ρ; Nx=Nx, Nθ=Nθ, λ=λ)
+    moba::Array{Float64,3}, mobp::Array{Float64,2}, mobθ::Array{Float64,3} = mob(fa,fp,ρ)
+    Fa::Array{Float64,4},   Fp::Array{Float64,3},   Fθ::Array{Float64,3}   = F_apθ(Ua, Up, Uθ, moba, mobp, mobθ; Nx=Nx, Nθ=Nθ)
+    
     a::Float64 = maximum(abs.(Ua));
-    b::Float64= maximum(abs.(Up));
+    b::Float64 = maximum(abs.(Up));
     c::Float64 = maximum(abs.(Uθ));
+    
     tempu::Float64 = 1/(6*max(a*Nx, b*Nx, c*Nθ*Dθ/(2*π)));
-    return Fa, Fp, Fθ, tempu
+    dt::Float64= min(δt, tempu)
+
+    fa -= dt*( site_div_θ(Fa; Nx=Nx, Nθ=Nθ) + Dθ*site_θ_diff(Fθ; Nx=Nx, Nθ=Nθ))
+    fp -= dt*site_div(Fp; Nx=Nx)
+
+    return fa, fp, dt
 end
 
 function pde_step!(param::Dict{String,Any}, density::Dict{String,Any})
     @unpack δt, Nx, Nθ, Dθ = param
-    Fa = Array{Float64,4}(undef, Nx, Nx, Nθ,2);
-    Fp = Array{Float64,3}(undef, Nx, Nx,2);
-    Fθ = Array{Float64,3}(undef, Nx, Nx, Nθ);
-    fa = Array{Float64,3}(undef, Nx, Nx, Nθ);
-    fp = Array{Float64,2}(undef, Nx, Nx);
     @unpack fa, fp, t = density
-    Fa, Fp, Fθ, tempu = fast_F_xyθ(param, density);
-    dt::Float64= min(δt, tempu)
-    for x₁ in 1:Nx, x₂ in 1:Nx
-        local y₁,y₂
-        ## 2 direction
-        y₁ ::Int64 = x₁
-        y₂ ::Int64 = (x₂ +Nx)%Nx +1
-        fa[y₁,y₂,:] += -dt*Nx*(Fa[y₁,y₂,:,2]-Fa[x₁,x₂,:,2])
-        fp[y₁,y₂]   += -dt*Nx*(Fp[y₁,y₂,2]  -Fp[x₁,x₂,2]  )
-        ## 1 direction
-        y₁ = (x₁ +Nx)%Nx +1
-        y₂ = x₂
-        fa[y₁,y₂,:] += -dt*Nx*(Fa[y₁,y₂,:,1]-Fa[x₁,x₂,:,1])
-        fp[y₁,y₂]   += -dt*Nx*(Fp[y₁,y₂,1]  -Fp[x₁,x₂,1]  )
-    end
-    for θ in 1:Nθ
-        ϕ ::Int64 = ((θ % Nθ) +1)
-        fa[:,:,ϕ] += -dt*Nθ*Dθ*(Fθ[:,:,ϕ]-Fθ[:,:,θ])/(2*π)
-    end
+    fa, fp , dt = time_step(fa, fp; Nx=Nx, Nθ=Nθ, λ=λ, Dθ=Dθ)
     t::Float64 += dt
-    #println(t)
+
     @pack! density = fa, fp, t
-    #println(density["t"])
     return dt
 end
 
@@ -239,7 +312,7 @@ function perturb_pde!(param::Dict{String,Any}, density::Dict{String,Any}; δ = 0
     @pack! density = fa;
 end
 
-function perturb_pde_run(para; max_steps = 20000, save_interval = 0.001)
+function perturb_pde_run(param; max_steps = 1e8, save_interval = 0.001)
     @unpack T = param
     density = initialize_density(param)
     perturb_pde!(param,density);
@@ -282,7 +355,7 @@ function animate_pdes(param,t_saves,pde_saves)
     pathname = "/home/jm2386/Active_Lattice/plots/pde_vids/$(name)/active=$(ρa)_passive=$(ρp)_lamb=$(λ)_Δt=$(Δt)";
     mkpath(pathname)
     filename = "/home/jm2386/Active_Lattice/plots/pde_vids/$(name)/active=$(ρa)_passive=$(ρp)_lamb=$(λ)_Δt=$(Δt)/time=$(round(T; digits = 5))_size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ).mp4";
-    myanim[:save](filename, bitrate=-1, dpi= 100, extra_args=["-vcodec", "libx264", "-pix_fmt", "yuv420p"])
+    myanim[:save](filename, bitrate=-1, dπ= 100, extra_args=["-vcodec", "libx264", "-πx_fmt", "yuv420p"])
 end 
 
 function plot_pde_mag(fig::Figure, ax::PyObject, param::Dict{String,Any}, density::Dict{String,Any})
@@ -361,11 +434,30 @@ end
 #Example 
 #=
 #Parameters
-param = pde_param(λ = 20, T = 0.003, name = "test7")
+param = pde_param(λ = 30., T = 0.003, name = "test7", Nθ =50, Dθ = 10., δt = 1e-5, ρa = 0.8)
 density = initialize_density(param)
+@unpack name, D, λ, ρa, ρp, δt, Nx, Nθ, S = param
+@unpack fa, fp, t = density
 perturb_pde!(param,density);
+
+ρ = fp + 2*π*sum(fa;dims = 3)[:,:,1]/Nθ
+p.(ρ)
+
+midpoint_bond_diff(fp; Nx = Nx)
+midpoint_bond_diff_θ(fa;  Nx = Nx,  Nθ = Nθ)
+midpoint_bond_av(coeff_mag_s(fa,ρ); Nx =Nx )
+
+@time for i in 1:10 pde_step!(param,density) end
+fig, ax = PyPlot.subplots(figsize =(10, 10))
+#plot_pde_mass(fig,ax,param,density)
+plot_pde_mag(fig,ax,param,density)
+display(fig)
+
+@unpack fa, fp, t = density
+dist_from_unif(param,fa,fp)
+
 #expand variables
-@unpack name, D, λ, ρa, ρp, δt, Nx, Nθ, = param
+@unpack name, D, λ, ρa, ρp, δt, Nx, Nθ, S = param
 @unpack fa, fp, t = density
 #Run and save
 run_pde_until!(param,density,0.002; save_on = true, max_steps = 20, save_interval = 0.001)
@@ -377,6 +469,9 @@ t_saves, fa_saves, fp_saves = load_pdes(param,0.003; save_interval = 0.0005)
 dist_saves = time_dist_from_unif(param, fa_saves, fp_saves)
 #plotting
 fig, ax = PyPlot.subplots(figsize =(10, 10))
+y = self_diff.(x)
+ax.plot(y)
+display(fig)
 density = initialize_density(param)
 n = 1#length(t_saves)
 t, fa, fp = t_saves[n], fa_saves[n], fp_saves[n]
