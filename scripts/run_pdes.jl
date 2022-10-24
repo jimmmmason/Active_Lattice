@@ -7,11 +7,11 @@ include("/home/jm2386/Active_Lattice/src/pde_functions.jl")
 
 #varying parameters
 params = []
-name = "high_density_stability_v2"
+name = "high_density_stability_v3"
 for ρ in [0.9, 0.92, 0.94, 0.96, 0.98]
-for λ in [10, 20, 30, 40, 50]
+for λ in [10., 20., 30., 40., 50.]
         local param
-        param = pde_param(; name = name, λ = λ , ρa = ρ, ρp = 0., T = 0.4 )
+        param = pde_param(; name = name, λ = λ , ρa = ρ, ρp = 0., T = 0.4, Dθ = 10., δt = 1e-5)
         push!(params,param)
 end
 end
@@ -24,9 +24,56 @@ dist_saves = time_dist_from_unif(param, fa_saves, fp_saves)
 fig, ax = PyPlot.subplots(figsize =(10, 10))
 n = 4
 t, fa, fp = t_saves[n], fa_saves[n], fp_saves[n]
-@pack! density = fa, fp, t
-fig, ax = PyPlot.subplots(figsize =(10, 10))
-plot_pde_mass(fig,ax,param,density)
+
 display(fig)
 #plot_pde_mag(fig,ax,param,density)
 #display(fig)
+name = "high_density_stability_v3"
+ρ = 0.9
+λ = 50.
+t = 0.15
+param = pde_param(; name = name, λ = λ , ρa = ρ, ρp = 0., T = 0.4, Dθ = 10., δt = 1e-5)
+@unpack name, Nx, Nθ, λ, ρa, ρp, δt = param
+filename = "/store/DAMTP/jm2386/Active_Lattice/data/pde_raw/$(name)/Nx=$(Nx)_Nθ=$(Nθ)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_dt=$(δt)/time=$(round(t; digits = 4))_Nx=$(Nx)_Nθ=$(Nθ)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_dt=$(δt).jld2";
+data = wload(filename)
+fa = data["fa"]
+fp = data["fp"]
+t = data["t"]
+@pack! density = fa, fp, t
+fig, ax = PyPlot.subplots(figsize =(10, 10))
+plot_pde_mass(fig,ax,param,density)
+#plot_pde_mag(fig,ax,param,density)
+display(fig)
+#
+fig, ax = PyPlot.subplots(figsize =(10, 10))
+param = pde_param(; name = name, λ = λ , ρa = ρ, ρp = 0., T = 0.4, Dθ = 10., δt = 1e-5)
+t_saves, fa_saves, fp_saves = load_pdes(param,0.3; save_interval = 0.003)
+dist_saves = time_dist_from_unif(param, fa_saves, fp_saves)
+fig, ax = PyPlot.subplots(figsize =(10, 10))
+ax.plot(t_saves,dist_saves)
+display(fig)
+#
+PyPlot.close()
+fig = figure(figsize=(10,10))
+i = 1 
+name = "high_density_stability_v3"
+for ρa in [0.9, 0.92]
+for λ in [10., 20., 30., 40., 50.]
+        ax = fig[:add_subplot](2,5,i)
+        param = pde_param(; name = name, λ = λ , ρa = ρa, ρp = 0., T = 0.4, Dθ = 10., δt = 1e-5)
+        t_saves, fa_saves, fp_saves = load_pdes(param,0.3; save_interval = 0.003)
+        plot_error(fig,ax, param, t_saves, fa_saves, fp_saves)
+        if λ == 10.
+                ax.set_ylabel("e")
+        end
+        if ρa == 0.9
+                ax.set_xlabel("t")
+        end
+        i += 1
+end
+end
+fig.tight_layout()
+display(fig)
+PyPlot.savefig("/store/DAMTP/jm2386/Active_Lattice/data/time_stability_test.pdf",dpi = 300, format = "pdf")
+
+

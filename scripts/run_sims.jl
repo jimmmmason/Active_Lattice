@@ -90,10 +90,10 @@ PyPlot.close()
 fig = figure(figsize=(10,10))
 i = 1 
 name = "cross_density_hist_data_4"
-t_start = 1.0
+t_start = 2.0
 t_end = 3.0
-L = 128
-r = 7
+L = 64
+r = 4
 for ρ in [0.8]
 for λ in [10, 12,14,16]
     ax = fig[:add_subplot](2,2,i)

@@ -5,7 +5,7 @@ println("booted")
 #runnning simulation
 using StatsBase, DataStructures, UnPack, LinearAlgebra, Random, TensorOperations, StaticArrays
 
-function pde_param(; name = "test", D =1. , λ =1. ,ρa = 0.5, ρp = 0.0, Nx = 100, Nθ = 100, δt = 0.0001, Dθ = 10, T= 0.001)
+function pde_param(; name = "test", D =1. , λ =1. ,ρa = 0.5, ρp = 0.0, Nx = 100, Nθ = 100, δt = 1e-5, Dθ = 10, T= 0.001)
     Ω  = [[i,j] for i in 1:Nx for j in 1:Nx ] 
     S  = [ θ for θ in 1:Nθ]
     E = [[1,0],[0,1],[0,-1],[-1,0],]
@@ -153,7 +153,7 @@ function coeff_s(rho::Float64,ds::Float64)
     return (rho>0 ? (1-rho-ds)/(rho*ds) : 0)
 end
 
-function coeff_mag_s(f::Array{Float64,3},ρ::Array{Float64,2}; Nθ::Int64 = Nθ,  Nx::Int64 = Nx)
+function coeff_mag_s(f::Array{Float64,3},ρ::Array{Float64,2}; Nθ::Int64 = 100,  Nx::Int64 = 100)
     m    ::Array{Float64,3} = mag(f; Nθ=Nθ, Nx=Nx );
     ds   ::Array{Float64,2} = self_diff.(ρ);
     s    ::Array{Float64,3} = reshape(coeff_s.(ρ,ds),1,Nx,Nx);
@@ -179,7 +179,7 @@ end
 function U_apθ(fa::Array{Float64,3}, fp::Array{Float64,2}, ρ::Array{Float64,2}; Nx::Int64 =100, Nθ::Int64 =100, λ::Float64 = 10.)
     logtol::Float64 = log(1e-10);
 
-    eθ:: Array{Float64,4} = reshape([cos.(S*2π/Nθ) sin.(S*2π/Nθ)],2,1,1,Nθ)
+    eθ:: Array{Float64,4} = reshape([cos.((1:Nθ)*2π/Nθ) sin.((1:Nθ)*2π/Nθ)],2,1,1,Nθ)
 
     logmfa::Array{Float64,3} = map(x -> (x>0 ? log(x) : logtol), fa);
     logmfp::Array{Float64,2} = map(x -> (x>0 ? log(x) : logtol), fp);
@@ -202,7 +202,7 @@ function F_apθ(Ua::Array{Float64,4}, Up::Array{Float64,3}, Uθ::Array{Float64,3
         y₁ ::Int64 = (x₁ +Nx)%Nx +1
         y₂ ::Int64 = x₂
         Fa[1,x₁,x₂,:] = upwind.(Ua[1,x₁,x₂,:], moba[x₁,x₂,:], moba[y₁,y₂,:])
-        Fp[1,x₁,x₂]   = upwind( Up[1,x₁,x₂]  , fp[x₁,x₂],   fp[y₁,y₂]  )
+        Fp[1,x₁,x₂]   = upwind( Up[1,x₁,x₂]  , mobp[x₁,x₂],   mobp[y₁,y₂]  )
         ## 2 direction
         y₁ = x₁
         y₂ = (x₂ +Nx)%Nx +1
@@ -212,14 +212,14 @@ function F_apθ(Ua::Array{Float64,4}, Up::Array{Float64,3}, Uθ::Array{Float64,3
     for θ in 1:Nθ
         local ϕ 
         ϕ::Int64 = ((θ % Nθ) +1)
-        Fθ[:,:,θ] = upwind.(Uθ[:,:,θ], fa[:,:,θ], fa[:,:,ϕ])
+        Fθ[:,:,θ] = upwind.(Uθ[:,:,θ], mobθ[:,:,θ], mobθ[:,:,ϕ])
     end
     return Fa, Fp, Fθ
 end
 
 ##
 
-function time_step(fa::Array{Float64,3}, fp::Array{Float64,2}; Nx::Int64 =100, Nθ::Int64 =100, λ::Float64 = 10., Dθ::Float64 = 10.)
+function time_step(fa::Array{Float64,3}, fp::Array{Float64,2}, δt::Float64; Nx::Int64 =100, Nθ::Int64 =100, λ::Float64 = 10., Dθ::Float64 = 10.)
     ρ::Array{Float64,2} = fp + sum(fa; dims =3)[:,:,1].*(2*π/Nθ)
     
     Ua::Array{Float64,4},   Up::Array{Float64,3},   Uθ::Array{Float64,3}   = U_apθ(fa,fp,ρ; Nx=Nx, Nθ=Nθ, λ=λ)
@@ -240,9 +240,9 @@ function time_step(fa::Array{Float64,3}, fp::Array{Float64,2}; Nx::Int64 =100, N
 end
 
 function pde_step!(param::Dict{String,Any}, density::Dict{String,Any})
-    @unpack δt, Nx, Nθ, Dθ = param
+    @unpack δt, Nx, Nθ, Dθ, λ = param
     @unpack fa, fp, t = density
-    fa, fp , dt = time_step(fa, fp; Nx=Nx, Nθ=Nθ, λ=λ, Dθ=Dθ)
+    fa, fp , dt = time_step(fa, fp, δt; Nx=Nx, Nθ=Nθ, λ=λ, Dθ=Dθ)
     t::Float64 += dt
 
     @pack! density = fa, fp, t
@@ -312,7 +312,7 @@ function perturb_pde!(param::Dict{String,Any}, density::Dict{String,Any}; δ = 0
     @pack! density = fa;
 end
 
-function perturb_pde_run(param; max_steps = 1e8, save_interval = 0.001)
+function perturb_pde_run(param; max_steps = 1e8, save_interval = 0.0001)
     @unpack T = param
     density = initialize_density(param)
     perturb_pde!(param,density);
@@ -412,13 +412,20 @@ function plot_pde_mass(fig::Figure, ax::PyObject, param::Dict{String,Any}, densi
     return fig
 end 
 
-
+function plot_error(fig::Figure, ax::PyObject,param, t_saves, fa_saves, fp_saves)
+    @unpack λ, Nx, Nθ, S, ρa, ρp= param
+    dist_saves = time_dist_from_unif(param, fa_saves, fp_saves)
+    ax.plot(t_saves,dist_saves)
+    ax.set_title("ρₐ = $(ρa), Pe = $(λ)")
+    ax.axis([0, 0.3, 0., 0.15])
+    ax.set_aspect("equal")
+end 
 ##
 #phase seperation metircs
 
 function dist_from_unif(param, fa, fp)
     @unpack name, Nx, Nθ, λ, ρa, ρp, δt = param
-    return 2*π*sqrt(sum( (fa .- ρa/(2*π) ).^2))/(Nx*Nx*Nθ) + sqrt(sum( (fp .- ρp).^2))/(Nx*Nx)
+    return 2*π*sqrt(sum( (fa .- ρa/(2*π) ).^2/(Nx*Nx*Nθ))) + sqrt(sum( (fp .- ρp).^2/(Nx*Nx)))
 end
 
 function time_dist_from_unif(param, fa_saves, fp_saves)
