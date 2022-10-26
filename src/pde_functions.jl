@@ -1,7 +1,7 @@
 cd("/home/jm2386/Active_Lattice/")
 using DrWatson
 @quickactivate "Active_Lattice"
-println("booted")
+println("Loading ...")
 #runnning simulation
 using StatsBase, DataStructures, UnPack, LinearAlgebra, Random, TensorOperations, StaticArrays
 
@@ -292,7 +292,7 @@ end
 
 function perturb_pde!(param::Dict{String,Any}, density::Dict{String,Any}; δ = 0.01, n2 = 2)
     @unpack Nx, S, ρa, ρp, λ, Dθ, Nx, Nθ = param
-    @unpack fa = density
+    @unpack fa, fp = density
     δ = min(δ, (1 - ρa - ρp)/(2*π+0.01));
     #from stability: 
     ρ = ρa + ρp
@@ -304,10 +304,14 @@ function perturb_pde!(param::Dict{String,Any}, density::Dict{String,Any}; δ = 0
     γ = -8*π^2
     Λ = 1/2*(-Dθ + γ*β + sqrt(Dθ^2 + 2*Dθ*β*γ + (β*γ)^2 - 2*a^2*γ*ρa*ρ ) )
     C = 2*π*ρa*(ρa + ρp)/ (1 + Λ)
-    P = (x,y,θ) -> δ*(cos(2*π*x/Nx)*cos(2*π*y/Nx) - C*(sin(2*π*x/Nx)*cos(2*π*y/Nx)*cos(2π*θ/Nθ) - sin(2*π*y/Nx)*cos(2*π*x/Nx)*sin(2π*θ/Nθ) ));
+    Pa = (x,y,θ) -> δ*( ρa*cos(2*π*x/Nx)*cos(2*π*y/Nx) - C*(sin(2*π*x/Nx)*cos(2*π*y/Nx)*cos(2π*θ/Nθ) - sin(2*π*y/Nx)*cos(2*π*x/Nx)*sin(2π*θ/Nθ) ));
+    Pp = (x,y) -> δ*( ρp*cos(2*π*x/Nx)*cos(2*π*y/Nx) );
     # 
     for x₁ in 1:Nx, x₂ in 1:Nx, θ in S
-        fa[x₁, x₂, θ] += P(x₁, x₂, θ);
+        fa[x₁, x₂, θ] += Pa(x₁, x₂, θ);
+    end
+    for x₁ in 1:Nx, x₂ in 1:Nx
+        fp[x₁, x₂] += Pp(x₁, x₂);
     end
     #=
     pert = zeros(Nx,Nx,Nθ)
@@ -327,106 +331,6 @@ function perturb_pde_run(param)
     run_pde_until!(param,density,T; save_on = true, max_steps = max_steps, save_interval = save_interval)
 end
 
-#visualise data
-using PyPlot, PyCall
-@pyimport matplotlib.animation as anim
-
-function load_pdes(param::Dict{String,Any},T; save_interval = 1.)
-    @unpack name, Nx, Nθ, λ, ρa, ρp, δt = param
-    t = 0.
-    fa_saves = []
-    fp_saves = []
-    t_saves = []
-    while t ≤ T
-        try 
-            filename = "/store/DAMTP/jm2386/Active_Lattice/data/pde_raw/$(name)/Nx=$(Nx)_Nθ=$(Nθ)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_dt=$(δt)/time=$(round(t; digits = 3))_Nx=$(Nx)_Nθ=$(Nθ)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_dt=$(δt).jld2";
-            data = wload(filename)
-            push!(t_saves,data["t"])
-            push!(fa_saves,data["fa"])
-            push!(fp_saves,data["fp"])
-        catch
-        end
-        t += save_interval
-    end
-    return t_saves, fa_saves, fp_saves
-end
-
-
-function animate_pdes(param,t_saves,pde_saves)
-    @unpack name, L, λ, ρa, ρp, Δt = param
-    frames = length(η_saves)-1
-    fig, ax = PyPlot.subplots(figsize =(10, 10))
-    makeframe(i) = plot_eta(fig,ax,param, t_saves[i+1], η_saves[i+1])
-    interval = Int64(round(5/Δt))
-    myanim = anim.FuncAnimation(fig, makeframe, frames=frames, interval=interval)
-    # Convert it to an MP4 movie file and saved on disk in this format.
-    pathname = "/home/jm2386/Active_Lattice/plots/pde_vids/$(name)/active=$(ρa)_passive=$(ρp)_lamb=$(λ)_Δt=$(Δt)";
-    mkpath(pathname)
-    filename = "/home/jm2386/Active_Lattice/plots/pde_vids/$(name)/active=$(ρa)_passive=$(ρp)_lamb=$(λ)_Δt=$(Δt)/time=$(round(T; digits = 5))_size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ).mp4";
-    myanim[:save](filename, bitrate=-1, dπ= 100, extra_args=["-vcodec", "libx264", "-πx_fmt", "yuv420p"])
-end 
-
-function plot_pde_mag(fig::Figure, ax::PyObject, param::Dict{String,Any}, density::Dict{String,Any})
-    @unpack λ, Nx, Nθ, S, ρa, ρp= param
-    @unpack fa, fp, t = density
-    #fig, ax = PyPlot.subplots(figsize =(10, 10))
-    #collect data
-    eθ = [cos.(S*2π/Nθ) sin.(S*2π/Nθ)]
-    @tensor begin
-        m[a,b,d] := 2π *fa[a,b,θ]*eθ[θ,d]/Nθ
-    end
-    ρ = fp + sum(fa; dims =3)[:,:,1].*(2*π/Nθ)
-    absmag  = sqrt.(m[:,:,1].^2+m[:,:,2].^2)
-    t = round(t; digits=5)
-    #Φ = round(translation_invariance(η;Ω = Ω,L= L); digits =4)
-    Δx = 1/Nx
-    #figure configuration
-    #ax.xaxis.set_ticks([])
-        #ax.yaxis.set_ticks([])
-        ax.axis([Δx, 1., Δx, 1.])
-        ax.set_aspect("equal")
-        ax.set_title("ρₐ = $(ρa),  ρₚ = $(ρp), Pe = $(λ), t = $(t)")
-    # Plot points
-    cp = ax.contourf(Δx:Δx:1, Δx:Δx:1,absmag; levels = 100, set_cmap = winter() )
-    fig.colorbar(cp)
-    #fig
-    return fig
-end 
-
-function plot_pde_mass(fig::Figure, ax::PyObject, param::Dict{String,Any}, density::Dict{String,Any})
-    @unpack λ, Nx, Nθ, S, ρa, ρp= param
-    @unpack fa, fp, t = density
-    #fig, ax = PyPlot.subplots(figsize =(10, 10))
-    #collect data
-    eθ = [cos.(S*2π/Nθ) sin.(S*2π/Nθ)]
-    @tensor begin
-        m[a,b,d] := 2π *fa[a,b,θ]*eθ[θ,d]/Nθ
-    end
-    ρ = fp + sum(fa; dims =3)[:,:,1].*(2*π/Nθ)
-    #absmag  = sqrt.(m[:,:,1].^2+m[:,:,2].^2)
-    t = round(t; digits=5)
-    #Φ = round(translation_invariance(η;Ω = Ω,L= L); digits =4)
-    Δx = 1/Nx
-    #figure configuration
-    #ax.xaxis.set_ticks([])
-        #ax.yaxis.set_ticks([])
-        ax.axis([Δx, 1., Δx, 1.])
-        ax.set_aspect("equal")
-        ax.set_title("ρₐ = $(ρa),  ρₚ = $(ρp), Pe = $(λ), t = $(t)")
-    # Plot points
-    cp = ax.contourf(Δx:Δx:1, Δx:Δx:1,ρ; levels = 100, set_cmap = winter() )
-    fig.colorbar(cp)
-    #fig
-    return fig
-end 
-
-function plot_error(fig::Figure, ax::PyObject,param, t_saves, fa_saves, fp_saves; t_max = 0.3, y_max = 0.2)
-    @unpack λ, Nx, Nθ, S, ρa, ρp= param
-    dist_saves = time_dist_from_unif(param, fa_saves, fp_saves)
-    ax.plot(t_saves,dist_saves)
-    ax.set_title("ρₐ = $(ρa), Pe = $(λ)")
-    ax.axis([0, t_max, 0., y_max])
-end 
 ##
 #phase seperation metircs
 
@@ -444,6 +348,189 @@ function time_dist_from_unif(param, fa_saves, fp_saves)
     return dist_saves
 end
 
+# loading
+
+function load_pdes(param::Dict{String,Any},T; save_interval = 1., start_time = 0.)
+    @unpack name, Nx, Nθ, λ, ρa, ρp, δt = param
+    t = start_time
+    fa_saves = []
+    fp_saves = []
+    t_saves = []
+    while t ≤ T
+        try 
+            filename = "/store/DAMTP/jm2386/Active_Lattice/data/pde_raw/$(name)/Nx=$(Nx)_Nθ=$(Nθ)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_dt=$(δt)/time=$(round(t; digits = 3))_Nx=$(Nx)_Nθ=$(Nθ)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_dt=$(δt).jld2";
+            data = wload(filename)
+            push!(t_saves,data["t"])
+            push!(fa_saves,data["fa"])
+            push!(fp_saves,data["fp"])
+        catch
+        end
+        t += save_interval
+    end
+    return t_saves, fa_saves, fp_saves
+end
+
+# stability
+
+function λsym(ϕ::Float64; Dθ::Float64 = 10., Dx = 1.)
+    α = π/2 -1
+    expr1 = Dθ*(1+2*α) + 4*Dx*π^2*(1-ϕ)*(1- 2*α^2*(1-ϕ)*ϕ - ϕ^2 + α*(2-ϕ+ϕ^2)  )
+    expr2 = ϕ*(1 + 3*ϕ - 4*ϕ ^2 + 4*α^2*(1 - 3 *ϕ  + 2 *ϕ^2) + α* (4 - 6 *ϕ  + 4 *ϕ ^2)  )
+    return  sqrt(8*Dx)*sqrt(1+2*α)*sqrt(expr1)/expr2
+end
+
+function refresh_stab_data(; ρs = 0.05:0.05:0.95,   Dθ = 10., Nx = 50, Nθ = 20, λs = 5.:5.:100., name = "high_density_stability_v4")
+
+    stabdata = Dict{String,Any}()
+    # for ρ in 0.90:0.01:0.99
+    for ρ in ρs
+            stable = []
+            unstable = []
+            unsure = []
+            data = Dict{String,Any}()
+            #load ans
+            for λ ∈ λs
+                    try
+                            param = pde_param(;name = name, λ = λ , ρa = ρ, ρp = 0., T = 1.0, Dθ = Dθ, δt = 1e-5, Nx = Nx, Nθ = Nθ, save_interval = 0.01, max_steps = 1e8)
+                            t_saves, fa_saves, fp_saves = load_pdes(param,1.1; save_interval = 0.001, start_time = 0.9)
+
+                            stab_dsit = dist_from_unif(param, fa_saves[1], fp_saves[1])
+
+                            if (stab_dsit>0.1)&(λ ∉ unstable)
+                                    push!(unstable,  λ)
+                                    break
+                            elseif (stab_dsit<0.05)&(λ ∉ stable)
+                                    push!(stable, λ)
+                            elseif (λ ∉ unsure)
+                                    push!(unsure, λ)
+                            end
+                    catch
+                        #break
+                    end
+            end
+            #calc ans
+            λcrit = λsym(ρ)
+            for λ ∈ λs
+                    if (λ ≤ λcrit)&(λ ∉ stable)
+                            push!(stable,  λ)
+                    end
+            end
+            #fillout ans
+            try 
+                    λmin = maximum(stable)
+                    for λ ∈ λs
+                            if (λ ≤ λmin)&(λ ∉ stable)
+                                    push!(stable,  λ)
+                            end
+                    end
+            catch
+            end
+            try 
+                    λmax = minimum(unstable)
+                    for λ ∈ λs
+                            if (λ ≥ λmax)&(λ ∉ unstable)
+                                    push!(unstable,  λ)
+                            end
+                    end
+            catch
+            end
+            @pack! data = λcrit, stable, unstable, unsure
+            stabdata["ρ = $(ρ)"] = data
+    end 
+    return stabdata
+end
+
+function plot_stab(fig, ax, stabdata; ρs = 0.05:0.05:0.95 ,xs = collect(0.01:0.01:0.99), xtic = 0:0.2:1, ytic = 0:10:100, axlim = [0., 1., 0., 100.] )
+    stable_points = []
+    unstable_points = []
+    unsure_points = []
+    for ρ in ρs
+            @unpack stable, unstable, unsure = stabdata["ρ = $(ρ)"]
+            for λ ∈ stable
+                    append!(stable_points,  [ρ; λ])
+            end
+            for λ ∈ unstable
+                    append!(unstable_points, [ρ; λ])
+            end
+            for λ ∈ unsure
+                    append!(unsure_points, [ρ; λ])
+            end
+    end             
+    stable_points   = reshape(stable_points, (2,Int64(length(stable_points)/2)) )
+    unstable_points = reshape(unstable_points, (2,Int64(length(unstable_points)/2)) )
+    unsure_points = reshape(unsure_points, (2,Int64(length(unsure_points)/2)) )
+
+    lower_bound = λsym.(xs; Dθ = 10.)
+
+    ax.plot(xs,lower_bound)
+
+    ax.errorbar(stable_points[1,:],stable_points[2,:], 
+    #markersize = 400/L, 
+    fmt= "o", 
+    color = "green",
+    alpha=0.8,
+    )
+
+    ax.errorbar(unstable_points[1,:],unstable_points[2,:], 
+    #markersize = 400/L, 
+    fmt= "o", 
+    color = "red",
+    alpha=0.8,
+    )
+
+    ax.errorbar(unsure_points[1,:],unsure_points[2,:], 
+    #markersize = 400/L, 
+    fmt= "o", 
+    color = "blue",
+    alpha=0.8,
+    )
+
+    ax.xaxis.set_ticks(xtic)
+    ax.yaxis.set_ticks(ytic)
+    ax.axis(axlim)
+    #ax.set_title("ρₐ = $(ρa),  ρₚ = $(ρp), λ = $(λ), t = $(t), Φ = $(Φ)")
+
+end
+
+
+function next_param(stabdata, param; λmax = 1e8, λ_step = 5.)
+    @unpack ρa = param
+    @unpack λcrit, stable, unstable, unsure = stabdata["ρ = $(ρa)"]
+    λmin = λcrit
+    try 
+        λmin = maximum(stable)
+    catch
+    end
+    λmax = λmax
+    try
+        λmax = minimum(unstable)
+    catch
+    end
+    λmid = λmax
+    try
+        λmid = minimum(unstable)
+    catch
+    end
+
+    if (λmid+λ_step < λmax)
+        next = λmid+λ_step
+        unfinished = true
+    elseif (λmin+λ_step < λmid)
+        next = λmin+λ_step
+        unfinished = true
+    else
+        next = 0.
+        unfinished = false
+    end
+    λ = next_λ
+    @pack! param = λ
+    return unfinished, next_λ, param
+end
+
+
+
+
+println("booted")
 
 #Example 
 #=

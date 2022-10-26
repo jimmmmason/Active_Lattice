@@ -23,11 +23,12 @@ exit
 =#
 addprocs([("cherry",:auto)])
 addprocs([("cyllene",:auto)])
-addprocs([("orthosie")])
+addprocs([("orthosie",:auto)])
 addprocs([("refract",:auto)])
+addprocs([("radius",:auto)])
 
-rmprocs([2,3,4,5,6])
-rmprocs([7])
+rmprocs([4])
+rmprocs([8,12,14])
 
 @distributed for i in 1:nprocs()
     host = gethostname()
@@ -35,3 +36,5 @@ rmprocs([7])
 end
 
 Distributed.interrupt()
+
+main_pool = WorkerPool([18, 24, 26, 27, 25, 20, 21, 19, 22, 28, 31, 29])

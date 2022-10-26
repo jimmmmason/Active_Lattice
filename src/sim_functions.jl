@@ -1,7 +1,7 @@
 cd("/home/jm2386/Active_Lattice/")
 using DrWatson
 @quickactivate "Active_Lattice"
-println("booted")
+println("Loading ...")
 ##
 #runnning simulation
 using StatsBase, DataStructures, UnPack, LinearAlgebra, Random
@@ -582,6 +582,9 @@ function indexmin(A)
     end 
     return X
 end
+#
+
+println("booted")
 
 #Example 
 #=
