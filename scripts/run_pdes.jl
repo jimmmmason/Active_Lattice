@@ -7,20 +7,19 @@ include("/home/jm2386/Active_Lattice/src/plot_functions.jl")
 #varying parameters
 params = []
 name = "high_density_stability_v4"
-for ρa in collect(0.90:0.02:0.98)
+for ρa in collect(0.91:0.01:0.99)
 for λ in [60.]
         local param
         #
-        param = pde_param(; name = name, λ = λ , ρa = ρa, ρp = 0., T = 1.0, Dθ = 10., δt = 1e-5, Nx = 50, Nθ = 20, save_interval = 0.01, max_steps = 1e7)
+        param = pde_param(; name = name, λ = λ , ρa = ρa, ρp = 0., T = 1.0, Dθ = 10., δt = 1e-5, Nx = 50, Nθ = 20, save_interval = 0.01, max_steps = 1e7, max_runs = 6, λ_step = 10.,)
         #
         push!(params,param)
 end
 end
 #run pdes
 @everywhere include("/home/jm2386/Active_Lattice/src/pde_functions.jl")
-@everywhere include("/home/jm2386/Active_Lattice/src/plot_functions.jl")
-pmap(perturb_pde_run, main_pool, params; distributed = true, batch_size=1, on_error=nothing,)
-#plot pde 
+pmap(run_stab_search, params; distributed = true, batch_size=1, on_error=nothing,)
+#plot pde
 perturb_pde_run(param)
 # /store/DAMTP/jm2386/Active_Lattice/data/pde_raw/
 t_saves, fa_saves, fp_saves = load_pdes(param,0.2; save_interval = 0.001)
@@ -87,9 +86,17 @@ plot_stab(fig, ax, stabdata; ρs = 0.05:0.05:0.95 ,xs = collect(0.01:0.01:0.99),
 display(fig)
 
 
+@unpack name, Nx, Nθ = param
+filename = "/store/DAMTP/jm2386/Active_Lattice/data/pde_pro/$(name)/stability_Nx=$(Nx)_Nθ=$(Nθ).jld2"
+#wsave(filename,stabdata)
+stabdata = wload(filename)
+
+
 #
-ρ = 0.6
+ρ = 0.4
 param = pde_param(; name = name, λ = λ , ρa = ρ, ρp = 0., T = 1.0, Dθ = 10., δt = 1e-5, Nx = 50, Nθ = 20, save_interval = 0.01, max_steps = 1e7)
 #
-unfinished, next, param = next_param(stabdata, param; λmax = 1e8, λ_step = 5.)
+unfinished, next, param = next_param(stabdata, param; λmax = 1e8, λ_step = 15.)
+
+
 

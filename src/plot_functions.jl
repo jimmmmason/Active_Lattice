@@ -8,7 +8,6 @@ println("Loading ...")
 using TensorOperations, PyPlot, PyCall
 @pyimport matplotlib.animation as anim
 
-
 function animate_pdes(param,t_saves,pde_saves)
     @unpack name, L, λ, ρa, ρp, Δt = param
     frames = length(η_saves)-1
@@ -83,6 +82,58 @@ function plot_error(fig::Figure, ax::PyObject,param, t_saves, fa_saves, fp_saves
     ax.plot(t_saves,dist_saves)
     ax.set_title("ρₐ = $(ρa), Pe = $(λ)")
     ax.axis([0, t_max, 0., y_max])
-end 
+end
+
+function plot_stab(fig, ax, stabdata; ρs = 0.05:0.05:0.95 ,xs = collect(0.01:0.01:0.99), xtic = 0:0.2:1, ytic = 0:10:100, axlim = [0., 1., 0., 100.] )
+    stable_points = []
+    unstable_points = []
+    unsure_points = []
+    for ρ in ρs
+            @unpack stable, unstable, unsure = stabdata["ρ = $(ρ)"]
+            for λ ∈ stable
+                    append!(stable_points,  [ρ; λ])
+            end
+            for λ ∈ unstable
+                    append!(unstable_points, [ρ; λ])
+            end
+            for λ ∈ unsure
+                    append!(unsure_points, [ρ; λ])
+            end
+    end             
+    stable_points   = reshape(stable_points, (2,Int64(length(stable_points)/2)) )
+    unstable_points = reshape(unstable_points, (2,Int64(length(unstable_points)/2)) )
+    unsure_points = reshape(unsure_points, (2,Int64(length(unsure_points)/2)) )
+
+    lower_bound = λsym.(xs; Dθ = 10.)
+
+    ax.plot(xs,lower_bound)
+
+    ax.errorbar(stable_points[1,:],stable_points[2,:], 
+    #markersize = 400/L, 
+    fmt= "o", 
+    color = "green",
+    alpha=0.8,
+    )
+
+    ax.errorbar(unstable_points[1,:],unstable_points[2,:], 
+    #markersize = 400/L, 
+    fmt= "o", 
+    color = "red",
+    alpha=0.8,
+    )
+
+    ax.errorbar(unsure_points[1,:],unsure_points[2,:], 
+    #markersize = 400/L, 
+    fmt= "o", 
+    color = "blue",
+    alpha=0.8,
+    )
+
+    ax.xaxis.set_ticks(xtic)
+    ax.yaxis.set_ticks(ytic)
+    ax.axis(axlim)
+    #ax.set_title("ρₐ = $(ρa),  ρₚ = $(ρp), λ = $(λ), t = $(t), Φ = $(Φ)")
+
+end
 
 println("booted")

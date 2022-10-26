@@ -3,7 +3,7 @@ using DrWatson
 @quickactivate "Active_Lattice"
 using Distributed
 
-addprocs([("indium",:auto)])
+
 #= dumbo bash commands to check they are awake
 ssh jm2386@ssh.maths.cam.ac.uk
 
@@ -23,7 +23,8 @@ exit
 =#
 addprocs([("cherry",:auto)])
 addprocs([("cyllene",:auto)])
-addprocs([("orthosie",:auto)])
+#addprocs([("indium",:auto)])
+#addprocs([("orthosie",:auto)])
 addprocs([("refract",:auto)])
 addprocs([("radius",:auto)])
 
@@ -37,4 +38,4 @@ end
 
 Distributed.interrupt()
 
-main_pool = WorkerPool([18, 24, 26, 27, 25, 20, 21, 19, 22, 28, 31, 29])
+main_pool = WorkerPool(collect(2:19))

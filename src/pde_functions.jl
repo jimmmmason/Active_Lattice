@@ -5,12 +5,12 @@ println("Loading ...")
 #runnning simulation
 using StatsBase, DataStructures, UnPack, LinearAlgebra, Random, TensorOperations, StaticArrays
 
-function pde_param(; name = "test", D =1. , λ =1. ,ρa = 0.5, ρp = 0.0, Nx = 100, Nθ = 100, δt = 1e-5, Dθ = 10, T= 0.001, save_interval = 0.01, max_steps = 1e8)
+function pde_param(; name = "test", D =1. , λ =1. ,ρa = 0.5, ρp = 0.0, Nx = 100, Nθ = 100, δt = 1e-5, Dθ = 10, T= 0.001, save_interval = 0.01, max_steps = 1e8, max_runs = 6, λ_step = 10.)
     Ω  = [[i,j] for i in 1:Nx for j in 1:Nx ] 
     S  = [ θ for θ in 1:Nθ]
     E = [[1,0],[0,1],[0,-1],[-1,0],]
     param = Dict{String,Any}()
-    @pack! param = name, D, λ, ρa, ρp, δt, Nx, Nθ, S,  E, Dθ, T, save_interval, max_steps
+    @pack! param = name, D, λ, ρa, ρp, δt, Nx, Nθ, S,  E, Dθ, T, save_interval, max_steps, max_runs, λ_step
     return param
 end
 
@@ -380,8 +380,14 @@ function λsym(ϕ::Float64; Dθ::Float64 = 10., Dx = 1.)
 end
 
 function refresh_stab_data(; ρs = 0.05:0.05:0.95,   Dθ = 10., Nx = 50, Nθ = 20, λs = 5.:5.:100., name = "high_density_stability_v4")
-
+    filename = "/store/DAMTP/jm2386/Active_Lattice/data/pde_pro/$(name)/stability_Nx=$(Nx)_Nθ=$(Nθ).jld2"
     stabdata = Dict{String,Any}()
+    try 
+        stabdata = wload(filename)
+    catch
+        stabdata = Dict{String,Any}()
+    end
+
     # for ρ in 0.90:0.01:0.99
     for ρ in ρs
             stable = []
@@ -436,64 +442,12 @@ function refresh_stab_data(; ρs = 0.05:0.05:0.95,   Dθ = 10., Nx = 50, Nθ = 2
             end
             @pack! data = λcrit, stable, unstable, unsure
             stabdata["ρ = $(ρ)"] = data
-    end 
+    end
+    wsave(filename,stabdata)
     return stabdata
 end
 
-function plot_stab(fig, ax, stabdata; ρs = 0.05:0.05:0.95 ,xs = collect(0.01:0.01:0.99), xtic = 0:0.2:1, ytic = 0:10:100, axlim = [0., 1., 0., 100.] )
-    stable_points = []
-    unstable_points = []
-    unsure_points = []
-    for ρ in ρs
-            @unpack stable, unstable, unsure = stabdata["ρ = $(ρ)"]
-            for λ ∈ stable
-                    append!(stable_points,  [ρ; λ])
-            end
-            for λ ∈ unstable
-                    append!(unstable_points, [ρ; λ])
-            end
-            for λ ∈ unsure
-                    append!(unsure_points, [ρ; λ])
-            end
-    end             
-    stable_points   = reshape(stable_points, (2,Int64(length(stable_points)/2)) )
-    unstable_points = reshape(unstable_points, (2,Int64(length(unstable_points)/2)) )
-    unsure_points = reshape(unsure_points, (2,Int64(length(unsure_points)/2)) )
-
-    lower_bound = λsym.(xs; Dθ = 10.)
-
-    ax.plot(xs,lower_bound)
-
-    ax.errorbar(stable_points[1,:],stable_points[2,:], 
-    #markersize = 400/L, 
-    fmt= "o", 
-    color = "green",
-    alpha=0.8,
-    )
-
-    ax.errorbar(unstable_points[1,:],unstable_points[2,:], 
-    #markersize = 400/L, 
-    fmt= "o", 
-    color = "red",
-    alpha=0.8,
-    )
-
-    ax.errorbar(unsure_points[1,:],unsure_points[2,:], 
-    #markersize = 400/L, 
-    fmt= "o", 
-    color = "blue",
-    alpha=0.8,
-    )
-
-    ax.xaxis.set_ticks(xtic)
-    ax.yaxis.set_ticks(ytic)
-    ax.axis(axlim)
-    #ax.set_title("ρₐ = $(ρa),  ρₚ = $(ρp), λ = $(λ), t = $(t), Φ = $(Φ)")
-
-end
-
-
-function next_param(stabdata, param; λmax = 1e8, λ_step = 5.)
+function next_param(stabdata, param; λmax = 1e8, λ_step = 15.)
     @unpack ρa = param
     @unpack λcrit, stable, unstable, unsure = stabdata["ρ = $(ρa)"]
     λmin = λcrit
@@ -513,22 +467,53 @@ function next_param(stabdata, param; λmax = 1e8, λ_step = 5.)
     end
 
     if (λmid+λ_step < λmax)
-        next = λmid+λ_step
+        next_λ = λmid
         unfinished = true
     elseif (λmin+λ_step < λmid)
-        next = λmin+λ_step
+        next_λ = λmin
         unfinished = true
     else
-        next = 0.
+        next_λ = 0.
         unfinished = false
     end
-    λ = next_λ
+
+    approx_next = 0.
+    while next_λ ≥ approx_next
+        approx_next += λ_step
+    end
+
+    λ = approx_next
     @pack! param = λ
-    return unfinished, next_λ, param
+    return unfinished, approx_next, param
 end
 
+function run_stab_search(param)
+    @unpack name, Nx, Nθ, max_runs, λ_step, ρa, Dθ, Nx, Nθ  = param
+    filename = "/store/DAMTP/jm2386/Active_Lattice/data/pde_pro/$(name)/stability_Nx=$(Nx)_Nθ=$(Nθ).jld2"
+    stabdata = Dict{String,Any}()
+    try 
+            stabdata = wload(filename)
+    catch
+            stabdata = Dict{String,Any}()
+    end
 
+    for i in max_runs
+            try
+                unfinished, λ_next, param = next_param(stabdata, param; λ_step = λ_step)
+                if unfinished
+                    perturb_pde_run(param)
+                end
+                stabdata = refresh_stab_data(; ρs = [ρa],   Dθ = Dθ, Nx = Nx, Nθ = Nθ, λs = [λ_next], name = name)
+            catch
+                println("error for ρ = $(ρ)")
+                host = gethostname()
+                println(host)
+                break
+            end
+    end
+end
 
+#
 
 println("booted")
 
