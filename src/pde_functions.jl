@@ -60,6 +60,32 @@ function midpoint_bond_diff_θ(f::Array{Float64,3}; Nx::Int64 = 100,  Nθ::Int64
     return grad_f
 end
 
+function midpoint_bond_av(f::Array{Float64,3}; dims =2, Nx::Int64 = 100) 
+    av_f::Array{Float64,3}= zeros(2, Nx, Nx)
+
+    for x₁ in 1:Nx, x₂ in 1:Nx
+        ## 1 direction
+        y₁ = (x₁ +Nx)%Nx +1
+        y₂ = x₂
+        av_f[1,x₁,x₂] = ( f[1,y₁,y₂] + f[1,x₁,x₂] )/2
+        ## 2 direction
+        y₁ = x₁
+        y₂ = (x₂ +Nx)%Nx +1
+        av_f[2,x₁,x₂] = ( f[2,y₁,y₂] + f[2,x₁,x₂] )/2
+    end
+    return av_f
+end
+
+function midpoint_Θ_diff(f::Array{Float64,3}; Nx::Int64 = 100,  Nθ::Int64 = 100) 
+    grad_f::Array{Float64,3} = zeros(Nx, Nx, Nθ)
+
+    for θ in 1:Nθ
+        ϕ = ((θ % Nθ) +1)
+        grad_f[:,:,θ] += Nθ*( f[:,:,ϕ] - f[:,:,θ] )/(2*π)
+    end
+    return grad_f
+end
+
 function site_div(f::Array{Float64,3}; Nx::Int64 = 100) 
 
     div_f::Array{Float64,2} = zeros(Nx, Nx)
@@ -107,32 +133,6 @@ function site_θ_diff(f::Array{Float64,3}; Nx::Int64 = 100,  Nθ::Int64 = 100)
     return div_f
 end
 
-function midpoint_bond_av(f::Array{Float64,3}; dims =2, Nx::Int64 = 100) 
-    av_f::Array{Float64,3}= zeros(2, Nx, Nx)
-
-    for x₁ in 1:Nx, x₂ in 1:Nx
-        ## 1 direction
-        y₁ = (x₁ +Nx)%Nx +1
-        y₂ = x₂
-        av_f[1,x₁,x₂] = ( f[1,y₁,y₂] + f[1,x₁,x₂] )/2
-        ## 2 direction
-        y₁ = x₁
-        y₂ = (x₂ +Nx)%Nx +1
-        av_f[2,x₁,x₂] = ( f[2,y₁,y₂] + f[2,x₁,x₂] )/2
-    end
-    return av_f
-end
-
-function midpoint_Θ_diff(f::Array{Float64,3}; Nx::Int64 = 100,  Nθ::Int64 = 100) 
-    grad_f::Array{Float64,3} = zeros(Nx, Nx, Nθ)
-
-    for θ in 1:Nθ
-        ϕ = ((θ % Nθ) +1)
-        grad_f[:,:,θ] += Nθ*( f[:,:,ϕ] - f[:,:,θ] )/(2*π)
-    end
-    return grad_f
-end
-
 ##
 
 function self_diff(ρ::Float64)
@@ -160,7 +160,7 @@ function coeff_mag_s(f::Array{Float64,3},ρ::Array{Float64,2}; Nθ::Int64 = 100,
     mag_s::Array{Float64,3} = s.*m
     return mag_s
 end
-
+#functon p is labelled W in the pdf
 function p(x::Float64)
     return -(π-1)*log(1-x)   + real(  -   ( (4 -5*π +π^2)*sqrt( Complex( (π-2)/( -26 +37*π -12π^2 +π^3 )) )*atanh( sqrt( Complex( (π-2)/( -26 +37*π -12π^2 +π^3 )) )*( 1 -6*x + π*(-1+2*x) )))   +    (1/2)*(-2 + π)*log( -2 -2*x + π^2(-1+x)*x + 6*x^2 + π*(2 +3*x -5x^2))     )
 end
@@ -183,7 +183,7 @@ function U_apθ(fa::Array{Float64,3}, fp::Array{Float64,2}, ρ::Array{Float64,2}
 
     logmfa::Array{Float64,3} = map(x -> (x>0 ? log(x) : logtol), fa);
     logmfp::Array{Float64,2} = map(x -> (x>0 ? log(x) : logtol), fp);
-    p_rho ::Array{Float64,2} = p.(ρ)
+    p_rho ::Array{Float64,2} = p.(ρ) #functon p is labelled W in the pdf
 
     Ua::Array{Float64,4}  = -midpoint_bond_diff_θ(logmfa .+ p_rho; Nx=Nx, Nθ=Nθ) .+ λ*midpoint_bond_av(coeff_mag_s(fa,ρ; Nθ=Nθ, Nx=Nx ); Nx =Nx ) .+ λ*eθ 
     Up::Array{Float64,3}  = -midpoint_bond_diff(  logmfp  + p_rho; Nx=Nx       )  + λ*midpoint_bond_av(coeff_mag_s(fa,ρ; Nθ=Nθ, Nx=Nx ); Nx =Nx )
