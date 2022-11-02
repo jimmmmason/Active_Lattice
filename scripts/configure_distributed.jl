@@ -28,13 +28,15 @@ addprocs([("cyllene",:auto)])
 addprocs([("refract",:auto)])
 addprocs([("radius",:auto)])
 
-rmprocs([4])
+rmprocs()
 rmprocs([8,12,14])
 
-@distributed for i in 1:nprocs()
+
+@distributed for i in 1:nworkers()
     host = gethostname()
     println(host)
 end
+nworkers()
 
 Distributed.interrupt()
 

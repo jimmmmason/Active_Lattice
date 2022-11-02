@@ -5,12 +5,12 @@ println("Loading ...")
 #runnning simulation
 using StatsBase, DataStructures, UnPack, LinearAlgebra, Random, TensorOperations, StaticArrays
 
-function pde_param(; name = "test", D =1. , λ =1. ,ρa = 0.5, ρp = 0.0, Nx = 100, Nθ = 100, δt = 1e-5, Dθ = 10, T= 0.001, save_interval = 0.01, max_steps = 1e8, max_runs = 6, λ_step = 10.)
+function pde_param(; name = "test", D =1. , λ =1. ,ρa = 0.5, ρp = 0.0, Nx = 100, Nθ = 100, δt = 1e-5, Dθ = 10, T= 0.001, save_interval = 0.01, max_steps = 1e8, max_runs = 6, λ_step = 10., λmax = 100., λs = 20.:20.:100.)
     Ω  = [[i,j] for i in 1:Nx for j in 1:Nx ] 
     S  = [ θ for θ in 1:Nθ]
     E = [[1,0],[0,1],[0,-1],[-1,0],]
     param = Dict{String,Any}()
-    @pack! param = name, D, λ, ρa, ρp, δt, Nx, Nθ, S,  E, Dθ, T, save_interval, max_steps, max_runs, λ_step
+    @pack! param = name, D, λ, ρa, ρp, δt, Nx, Nθ, S,  E, Dθ, T, save_interval, max_steps, max_runs, λ_step, λmax, λs
     return param
 end
 
@@ -379,78 +379,92 @@ function λsym(ϕ::Float64; Dθ::Float64 = 10., Dx = 1.)
     return  sqrt(8*Dx)*sqrt(1+2*α)*sqrt(expr1)/expr2
 end
 
-function refresh_stab_data(; ρs = 0.05:0.05:0.95,   Dθ = 10., Nx = 50, Nθ = 20, λs = 5.:5.:100., name = "high_density_stability_v4")
+function refresh_stab_data(;stabdata = Dict{String,Any}(), ρs = 0.05:0.05:0.95,   Dθ = 10., Nx = 50, Nθ = 20, λs = 5.:5.:100., name = "high_density_stability_v4", save_on = true)
     filename = "/store/DAMTP/jm2386/Active_Lattice/data/pde_pro/$(name)/stability_Nx=$(Nx)_Nθ=$(Nθ).jld2"
-    stabdata = Dict{String,Any}()
-    try 
-        stabdata = wload(filename)
+
+    if save_on
+        try 
+            stabdata = wload(filename)
+        catch
+        end
+    end
+
+    try
+        println(stabdata["ρ = $(ρs[1])"])
     catch
-        stabdata = Dict{String,Any}()
     end
 
     # for ρ in 0.90:0.01:0.99
     for ρ in ρs
-            stable = []
-            unstable = []
-            unsure = []
-            data = Dict{String,Any}()
-            #load ans
-            for λ ∈ λs
-                    try
-                            param = pde_param(;name = name, λ = λ , ρa = ρ, ρp = 0., T = 1.0, Dθ = Dθ, δt = 1e-5, Nx = Nx, Nθ = Nθ, save_interval = 0.01, max_steps = 1e8)
-                            t_saves, fa_saves, fp_saves = load_pdes(param,1.1; save_interval = 0.001, start_time = 0.9)
+        stable = []
+        unstable = []
+        unsure = []
+        data = Dict{String,Any}()
+        #load ans
+        for λ ∈ λs
+                try
+                    param = pde_param(;name = name, λ = λ , ρa = ρ, ρp = 0., T = 1.0, Dθ = Dθ, δt = 1e-5, Nx = Nx, Nθ = Nθ, save_interval = 0.01, max_steps = 1e8)
+                    t_saves, fa_saves, fp_saves = load_pdes(param,1.1; save_interval = 0.001, start_time = 0.9)
 
-                            stab_dsit = dist_from_unif(param, fa_saves[1], fp_saves[1])
+                    stab_dsit = dist_from_unif(param, fa_saves[1], fp_saves[1])
 
-                            if (stab_dsit>0.1)&(λ ∉ unstable)
-                                    push!(unstable,  λ)
-                                    break
-                            elseif (stab_dsit<0.05)&(λ ∉ stable)
-                                    push!(stable, λ)
-                            elseif (λ ∉ unsure)
-                                    push!(unsure, λ)
-                            end
-                    catch
+                    if (stab_dsit>0.1)&(λ ∉ unstable)
+                        push!(unstable,  λ)
+                    elseif (stab_dsit<0.05)&(λ ∉ stable)
+                        push!(stable, λ)
+                    elseif (λ ∉ unsure)
+                        push!(unsure, λ)
+                    end
+                catch
                         #break
-                    end
-            end
-            #calc ans
-            λcrit = λsym(ρ)
-            for λ ∈ λs
-                    if (λ ≤ λcrit)&(λ ∉ stable)
+                end
+        end
+        #calc ans
+        λcrit = λsym(ρ; Dθ = Dθ)
+        for λ ∈ λs
+                if (λ ≤ λcrit)&(λ ∉ stable)
                             push!(stable,  λ)
-                    end
-            end
-            #fillout ans
+                end
+        end
+        #fillout ans
             try 
                     λmin = maximum(stable)
                     for λ ∈ λs
-                            if (λ ≤ λmin)&(λ ∉ stable)
-                                    push!(stable,  λ)
-                            end
+                        if (λ ≤ λmin)&(λ ∉ stable)
+                            push!(stable,  λ)
+                        end
                     end
             catch
             end
             try 
-                    λmax = minimum(unstable)
-                    for λ ∈ λs
-                            if (λ ≥ λmax)&(λ ∉ unstable)
-                                    push!(unstable,  λ)
-                            end
+                λmax = minimum(unstable)
+                for λ ∈ λs
+                    if (λ ≥ λmax)&(λ ∉ unstable)
+                        push!(unstable,  λ)
                     end
+                end
             catch
             end
             @pack! data = λcrit, stable, unstable, unsure
             stabdata["ρ = $(ρ)"] = data
     end
-    wsave(filename,stabdata)
+    if save_on
+        wsave(filename,stabdata)
+    end
+    println(stabdata["ρ = $(ρs[1])"])
     return stabdata
 end
 
-function next_param(stabdata, param; λmax = 1e8, λ_step = 15.)
-    @unpack ρa = param
-    @unpack λcrit, stable, unstable, unsure = stabdata["ρ = $(ρa)"]
-    λmin = λcrit
+function next_param(stabdata, param; λmax = 1e8, λ_step = 10.)
+    @unpack ρa, Dθ, = param
+    stable = []
+    unstable = [] 
+    unsure = []
+    try
+        @unpack λcrit, stable, unstable, unsure = stabdata["ρ = $(ρa)"]
+    catch
+    end
+    λmin = λsym(ρa; Dθ=Dθ, Dx=1. )
     try 
         λmin = maximum(stable)
     catch
@@ -462,7 +476,7 @@ function next_param(stabdata, param; λmax = 1e8, λ_step = 15.)
     end
     λmid = λmax
     try
-        λmid = minimum(unstable)
+        λmid = minimum(unsure)
     catch
     end
 
@@ -488,31 +502,65 @@ function next_param(stabdata, param; λmax = 1e8, λ_step = 15.)
 end
 
 function run_stab_search(param)
-    @unpack name, Nx, Nθ, max_runs, λ_step, ρa, Dθ, Nx, Nθ  = param
+    @unpack name, Nx, Nθ, max_runs, λ_step, ρa, Dθ, Nx, Nθ, λmax, λs = param
     filename = "/store/DAMTP/jm2386/Active_Lattice/data/pde_pro/$(name)/stability_Nx=$(Nx)_Nθ=$(Nθ).jld2"
     stabdata = Dict{String,Any}()
     try 
-            stabdata = wload(filename)
+        stabdata = wload(filename)
     catch
-            stabdata = Dict{String,Any}()
+        println(" error for ρ = $(ρa)")
+        host = gethostname()
+        println(host)
     end
 
-    for i in max_runs
-            try
-                unfinished, λ_next, param = next_param(stabdata, param; λ_step = λ_step)
-                if unfinished
-                    perturb_pde_run(param)
-                end
-                stabdata = refresh_stab_data(; ρs = [ρa],   Dθ = Dθ, Nx = Nx, Nθ = Nθ, λs = [λ_next], name = name)
-            catch
-                println("error for ρ = $(ρ)")
-                host = gethostname()
-                println(host)
-                break
-            end
+    i = 0
+    unfinished = true
+    while  (i < max_runs)&unfinished
+        unfinished, λ_next, param = next_param(stabdata, param; λ_step = λ_step, λmax=λmax)
+        if unfinished
+                println("running λ = $(λ_next) ρ = $(ρa)")
+                perturb_pde_run(param)
+                stabdata = refresh_stab_data(;stabdata = stabdata,  ρs = [ρa],   Dθ = Dθ, Nx = Nx, Nθ = Nθ, λs = λs , name = name, save_on = false)
+                println("finished λ = $(λ_next) ρ = $(ρa)")
+        end
+        i += 1 
+        println("iteration = $(i), unfinished = $(unfinished)")
+        println("while condition = $((i < max_runs)&unfinished))")
     end
+    println("i am done")
+
+    return ρa, stabdata["ρ = $(ρa)"]
 end
 
+function run_stab_search_stupid_mode(param)
+    @unpack name, Nx, Nθ, max_runs, λ_step, ρa, Dθ, Nx, Nθ, λmax, λs = param
+    filename = "/store/DAMTP/jm2386/Active_Lattice/data/pde_pro/$(name)/stability_Nx=$(Nx)_Nθ=$(Nθ).jld2"
+    stabdata = Dict{String,Any}()
+    try 
+        stabdata = wload(filename)
+    catch
+        println(" error for ρ = $(ρa)")
+        host = gethostname()
+        println(host)
+    end
+
+    i = 0
+    unfinished, λ_next, param = next_param(stabdata, param; λ_step = λ_step, λmax=λmax)
+    while  (i < max_runs)&unfinished
+        @unpack λ = param
+        println("running λ = $(λ) ρ = $(ρa)")
+        perturb_pde_run(param)
+        #stabdata = refresh_stab_data(;stabdata = stabdata,  ρs = [ρa],   Dθ = Dθ, Nx = Nx, Nθ = Nθ, λs = λs , name = name, save_on = false)
+        println("finished λ = $(λ) ρ = $(ρa)")
+        λ += λ_step
+        @pack! param = λ
+        i += 1 
+        println("iteration = $(i)")
+    end
+    println("i am done")
+
+    return ρa, stabdata["ρ = $(ρa)"]
+end
 #
 
 println("booted")

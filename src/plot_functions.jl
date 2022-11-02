@@ -84,14 +84,17 @@ function plot_error(fig::Figure, ax::PyObject,param, t_saves, fa_saves, fp_saves
     ax.axis([0, t_max, 0., y_max])
 end
 
-function plot_stab(fig, ax, stabdata; ρs = 0.05:0.05:0.95 ,xs = collect(0.01:0.01:0.99), xtic = 0:0.2:1, ytic = 0:10:100, axlim = [0., 1., 0., 100.] )
+function plot_stab(fig, ax, stabdata; ρs = 0.05:0.05:0.95 ,xs = collect(0.01:0.01:0.99), xtic = 0:0.2:1, ytic = 0:10:100, axlim = [0., 1., 0., 100.], Dθ = 10. )
     stable_points = []
     unstable_points = []
     unsure_points = []
+    binodal_y = Array{Float64,1}([])
+    binodal_x = Array{Float64,1}([])
     for ρ in ρs
             @unpack stable, unstable, unsure = stabdata["ρ = $(ρ)"]
             for λ ∈ stable
                     append!(stable_points,  [ρ; λ])
+                    
             end
             for λ ∈ unstable
                     append!(unstable_points, [ρ; λ])
@@ -99,15 +102,27 @@ function plot_stab(fig, ax, stabdata; ρs = 0.05:0.05:0.95 ,xs = collect(0.01:0.
             for λ ∈ unsure
                     append!(unsure_points, [ρ; λ])
             end
+            try
+                local y
+                y = (maximum(stable)+minimum(unstable))/2
+                push!(binodal_y,y)
+                push!(binodal_x,ρ)
+            catch
+            end
     end             
     stable_points   = reshape(stable_points, (2,Int64(length(stable_points)/2)) )
     unstable_points = reshape(unstable_points, (2,Int64(length(unstable_points)/2)) )
     unsure_points = reshape(unsure_points, (2,Int64(length(unsure_points)/2)) )
 
-    lower_bound = λsym.(xs; Dθ = 10.)
+    lower_bound = λsym.(xs; Dθ = Dθ)
+    ax.plot(xs,lower_bound, color = "black")
 
-    ax.plot(xs,lower_bound)
-
+    #=
+    fit = curve_fit(RationalPoly, collect(binodal_x), collect(binodal_y), 2,2)
+    binodal_y = fit.(xs)
+    ax.plot(xs,binodal_y, color = "black", linestyle = "--")
+    =#
+    
     ax.errorbar(stable_points[1,:],stable_points[2,:], 
     #markersize = 400/L, 
     fmt= "o", 
