@@ -69,8 +69,8 @@ param = pde_param(;name = name, λ = λ , ρa = ρa, ρp = 0., T = 1.0, Dθ = D�
         t = data["t"]
         @pack! density = fa, fp, t
         fig, ax = PyPlot.subplots(figsize =(10, 10))
-        #plot_pde_mass(fig,ax,param,density)
-        plot_pde_mag(fig,ax,param,density)
+        plot_pde_mass(fig,ax,param,density)
+        #plot_pde_mag(fig,ax,param,density)
         display(fig)
 #
 fig, ax = PyPlot.subplots(figsize =(10, 10))

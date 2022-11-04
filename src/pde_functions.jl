@@ -162,7 +162,11 @@ function coeff_mag_s(f::Array{Float64,3},ρ::Array{Float64,2}; Nθ::Int64 = 100,
 end
 #functon p is labelled W in the pdf
 function p(x::Float64)
-    return -(π-1)*log(1-x)   + real(  -   ( (4 -5*π +π^2)*sqrt( Complex( (π-2)/( -26 +37*π -12π^2 +π^3 )) )*atanh( sqrt( Complex( (π-2)/( -26 +37*π -12π^2 +π^3 )) )*( 1 -6*x + π*(-1+2*x) )))   +    (1/2)*(-2 + π)*log( -2 -2*x + π^2(-1+x)*x + 6*x^2 + π*(2 +3*x -5x^2))     )
+    c2::Float64 = sqrt( (π-2)/( (π-1)*(26+(-11+π)*π))  )
+    c3::Float64 = -(-4+π)sqrt( 1+8*(π-3)/( 26+(-11+π)*π)  )/2
+    p1::Float64 = (1-π+2*(-3+π)*x)
+    p2::Float64 = -2  +2*π  -(-2+π)*(-1+π)*x  +(-3+π)*(-2+π)*x^2
+    return c3*log(-1-c2*p1)  -c3*log(1-c2*p1)  +(1 -π)*log(1-x)   + 0.5*(-2+π)*log(p2)
 end
 
 function mob(fa::Array{Float64,3}, fp::Array{Float64,2}, ρ::Array{Float64,2})
@@ -290,22 +294,37 @@ function run_pde_until!(param::Dict{String,Any},density::Dict{String,Any},T; sav
     end
 end
 
-function perturb_pde!(param::Dict{String,Any}, density::Dict{String,Any}; δ = 0.01, n2 = 2)
+function perturb_pde!(param::Dict{String,Any}, density::Dict{String,Any}; δ = 0.01, pert = "n=2")
     @unpack Nx, S, ρa, ρp, λ, Dθ, Nx, Nθ = param
     @unpack fa, fp = density
-    δ = min(δ, (1 - ρa - ρp)/(2*π+0.01));
-    #from stability: 
     ρ = ρa + ρp
+    if ρ >0.9
+        δ = min(δ, (1 - ρ)/(2*π+0.01));
+    end
+    #from stability: 
     α = π/2 -1
-    ds = ( -ρ .+1).*( α*(2*α-1)/(2*α+1)*ρ.^2 + α*ρ .+1)
-    dsp = - ( α*(2*α-1)/(2*α+1)*ρ.^2 + α*ρ .+1) + ( -ρ .+1)*(2*α*(2*α-1)/(2*α+1)*ρ + α );
-    β = 1- ds;
-    a = λ* ( (1-ρ-ds)/ρ - dsp) /2
-    γ = -8*π^2
-    Λ = 1/2*(-Dθ + γ*β + sqrt(Dθ^2 + 2*Dθ*β*γ + (β*γ)^2 - 2*a^2*γ*ρa*ρ ) )
-    C = 2*π*ρa*(ρa + ρp)/ (1 + Λ)
-    Pa = (x,y,θ) -> δ*( ρa*cos(2*π*x/Nx)*cos(2*π*y/Nx) - C*(sin(2*π*x/Nx)*cos(2*π*y/Nx)*cos(2π*θ/Nθ) - sin(2*π*y/Nx)*cos(2*π*x/Nx)*sin(2π*θ/Nθ) ));
-    Pp = (x,y) -> δ*( ρp*cos(2*π*x/Nx)*cos(2*π*y/Nx) );
+        ds = ( -ρ .+1).*( α*(2*α-1)/(2*α+1)*ρ.^2 + α*ρ .+1)
+        dsp = - ( α*(2*α-1)/(2*α+1)*ρ.^2 + α*ρ .+1) + ( -ρ .+1)*(2*α*(2*α-1)/(2*α+1)*ρ + α );
+        β = 1- ds;
+        a = λ* ( (1-ρ-ds)/ρ - dsp) /2
+    if pert == "n=2"
+        γ = -8*π^2
+        Λ = 1/2*(-Dθ + γ*β + sqrt(Dθ^2 + 2*Dθ*β*γ + (β*γ)^2 - 2*a^2*γ*ρa*ρ ) )
+        C = 2*π*ρa*(ρa + ρp)/ (1 + Λ)
+        Pa = (x,y,θ) -> δ*( ρa*cos(2*π*x/Nx)*cos(2*π*y/Nx) - C*(sin(2*π*x/Nx)*cos(2*π*y/Nx)*cos(2π*θ/Nθ) - sin(2*π*y/Nx)*cos(2*π*x/Nx)*sin(2π*θ/Nθ) ));
+        Pp = (x,y) -> δ*( ρp*cos(2*π*x/Nx)*cos(2*π*y/Nx) );
+    end
+    if pert == "n=1"
+        γ = -4*π^2
+        Λ = 1/2*(-Dθ + γ*β + sqrt(Dθ^2 + 2*Dθ*β*γ + (β*γ)^2 - 2*a^2*γ*ρa*ρ ) )
+        C = 2*π*ρa*(ρa + ρp)/ (1 + Λ)
+        Pa = (x,y,θ) -> δ*( ρa*cos(2*π*x/Nx) - C*(sin(2*π*x/Nx)*cos(2π*θ/Nθ)) );
+        Pp = (x,y) -> δ*( ρp*cos(2*π*x/Nx) );
+    end
+    if pert == "rand"
+        Pa = (x,y,θ) -> δ*ρa*(( rand() - 0.5 )/(ρa+0.01))/(2*π);
+        Pp = (x,y) -> δ*ρp*( rand() - 0.5 )/(ρp+0.01);
+    end
     # 
     for x₁ in 1:Nx, x₂ in 1:Nx, θ in S
         fa[x₁, x₂, θ] += Pa(x₁, x₂, θ);
@@ -568,25 +587,76 @@ println("booted")
 #Example 
 #=
 #Parameters
-param = pde_param(λ = 30., T = 0.003, name = "test7", Nθ =50, Dθ = 10., δt = 1e-5, ρa = 0.8)
+name = "random_test"
+ρa = 0.6
+λ = 300.
+t = 0.701
+Dθ = 100.
+Nx = 20
+param = pde_param(;name = name, 
+        λ = λ , ρa = ρa, ρp = 0., T = 1.0, Dθ = Dθ, δt = 1e-5, Nx = Nx, Nθ = 20, save_interval = 0.01, max_steps = 1e8
+)
+
 density = initialize_density(param)
 @unpack name, D, λ, ρa, ρp, δt, Nx, Nθ, S = param
 @unpack fa, fp, t = density
-perturb_pde!(param,density);
-
+perturb_pde!(param,density; pert = "n=1")
+for i in 1:100 pde_step!(param,density) end
 ρ = fp + 2*π*sum(fa;dims = 3)[:,:,1]/Nθ
 p.(ρ)
 
+@unpack T, save_interval, max_steps = param
+T = 0.5
+density = initialize_density(param)
+perturb_pde!(param,density; pert = "rand", δ = 0.5);
 
+run_pde_until!(param,density,T; save_on = true, max_steps = max_steps, save_interval = save_interval)
 
 midpoint_bond_diff(fp; Nx = Nx)
 midpoint_bond_diff_θ(fa;  Nx = Nx,  Nθ = Nθ)
 midpoint_bond_av(coeff_mag_s(fa,ρ); Nx =Nx )
 
 @time for i in 1:10 pde_step!(param,density) end
+
 fig, ax = PyPlot.subplots(figsize =(10, 10))
 plot_pde_mass(fig,ax,param,density)
 #plot_pde_mag(fig,ax,param,density)
+display(fig)
+
+fig, ax = PyPlot.subplots(figsize =(10, 10))
+#plot_pde_mass(fig,ax,param,density)
+plot_pde_mag(fig,ax,param,density)
+display(fig)
+
+t = 0.0
+
+@unpack name, Nx, Nθ, λ, ρa, ρp, δt = param
+        filename = "/store/DAMTP/jm2386/Active_Lattice/data/pde_raw/$(name)/Nx=$(Nx)_Nθ=$(Nθ)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_dt=$(δt)/time=$(round(t; digits = 4))_Nx=$(Nx)_Nθ=$(Nθ)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_dt=$(δt).jld2";
+        data = wload(filename)
+        fa = data["fa"]
+        fp = data["fp"]
+        #t = data["t"]
+        @pack! density = fa, fp, t
+        fig, ax = PyPlot.subplots(figsize =(10, 10))
+        plot_pde_mass(fig,ax,param,density)
+        #plot_pde_mag(fig,ax,param,density)
+display(fig)
+t += 0.01
+
+magx = []
+magy = []
+for t= 0.:0.01:0.4
+    filename = "/store/DAMTP/jm2386/Active_Lattice/data/pde_raw/$(name)/Nx=$(Nx)_Nθ=$(Nθ)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_dt=$(δt)/time=$(round(t; digits = 4))_Nx=$(Nx)_Nθ=$(Nθ)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_dt=$(δt).jld2";
+    data = wload(filename)
+    fa = data["fa"]
+    m  = mag(fa; Nθ = Nθ, Nx =Nx)
+    av_m = sum(m; dims = (2,3))/(Nx*Nx)
+    push!(magx, av_m[1])
+    push!(magy, av_m[2])
+end
+fig, ax = PyPlot.subplots(figsize =(10, 10))
+ax.plot(0.:0.01:0.4,magx)
+ax.plot(0.:0.01:0.4,magy)
 display(fig)
 
 @unpack fa, fp, t = density
