@@ -5,12 +5,12 @@ println("Loading ...")
 #runnning simulation
 using StatsBase, DataStructures, UnPack, LinearAlgebra, Random, TensorOperations, StaticArrays
 
-function pde_param(; name = "test", D =1. , λ =1. ,ρa = 0.5, ρp = 0.0, Nx = 100, Nθ = 100, δt = 1e-5, Dθ = 10, T= 0.001, save_interval = 0.01, max_steps = 1e8, max_runs = 6, λ_step = 10., λmax = 100., λs = 20.:20.:100.)
+function pde_param(; name = "test", D =1. , λ =1. ,ρa = 0.5, ρp = 0.0, Nx = 100, Nθ = 100, δt = 1e-5, Dθ = 10, T= 0.001, save_interval = 0.01, max_steps = 1e8, max_runs = 6, λ_step = 10., λmax = 100., λs = 20.:20.:100., pert = "n=1")
     Ω  = [[i,j] for i in 1:Nx for j in 1:Nx ] 
     S  = [ θ for θ in 1:Nθ]
     E = [[1,0],[0,1],[0,-1],[-1,0],]
     param = Dict{String,Any}()
-    @pack! param = name, D, λ, ρa, ρp, δt, Nx, Nθ, S,  E, Dθ, T, save_interval, max_steps, max_runs, λ_step, λmax, λs
+    @pack! param = name, D, λ, ρa, ρp, δt, Nx, Nθ, S,  E, Dθ, T, save_interval, max_steps, max_runs, λ_step, λmax, λs, pert
     return param
 end
 
@@ -162,6 +162,11 @@ function coeff_mag_s(f::Array{Float64,3},ρ::Array{Float64,2}; Nθ::Int64 = 100,
 end
 #functon p is labelled W in the pdf
 function p(x::Float64)
+    if x <0.
+        x = 0.
+    elseif x>1.
+        x = 1.
+    end
     c2::Float64 = sqrt( (π-2)/( (π-1)*(26+(-11+π)*π))  )
     c3::Float64 = -(-4+π)sqrt( 1+8*(π-3)/( 26+(-11+π)*π)  )/2
     p1::Float64 = (1-π+2*(-3+π)*x)
@@ -183,18 +188,19 @@ end
 function U_apθ(fa::Array{Float64,3}, fp::Array{Float64,2}, ρ::Array{Float64,2}; Nx::Int64 =100, Nθ::Int64 =100, λ::Float64 = 10.)
     logtol::Float64 = log(1e-10);
 
-    eθ:: Array{Float64,4} = reshape([cos.((1:Nθ)*2π/Nθ) sin.((1:Nθ)*2π/Nθ)],2,1,1,Nθ)
+    eθ:: Array{Float64,4} = reshape([cos.((1:Nθ)*2π/Nθ) sin.((1:Nθ)*2π/Nθ)]',2,1,1,Nθ)
 
     logmfa::Array{Float64,3} = map(x -> (x>0 ? log(x) : logtol), fa);
     logmfp::Array{Float64,2} = map(x -> (x>0 ? log(x) : logtol), fp);
     p_rho ::Array{Float64,2} = p.(ρ) #functon p is labelled W in the pdf
 
-    Ua::Array{Float64,4}  = -midpoint_bond_diff_θ(logmfa .+ p_rho; Nx=Nx, Nθ=Nθ) .+ λ*midpoint_bond_av(coeff_mag_s(fa,ρ; Nθ=Nθ, Nx=Nx ); Nx =Nx ) .+ λ*eθ 
-    Up::Array{Float64,3}  = -midpoint_bond_diff(  logmfp  + p_rho; Nx=Nx       )  + λ*midpoint_bond_av(coeff_mag_s(fa,ρ; Nθ=Nθ, Nx=Nx ); Nx =Nx )
+    Ua::Array{Float64,4}  = -midpoint_bond_diff_θ(logmfa .+ p_rho; Nx=Nx, Nθ=Nθ).+ λ*midpoint_bond_av(coeff_mag_s(fa,ρ; Nθ=Nθ, Nx=Nx ); Nx =Nx ) .+ λ*eθ 
+    Up::Array{Float64,3}  = -midpoint_bond_diff(  logmfp  + p_rho; Nx=Nx       ) + λ*midpoint_bond_av(coeff_mag_s(fa,ρ; Nθ=Nθ, Nx=Nx ); Nx =Nx )
     Uθ::Array{Float64,3}  = -midpoint_Θ_diff(fa; Nx=Nx, Nθ = Nθ)
 
     return Ua, Up, Uθ
 end
+
 
 function F_apθ(Ua::Array{Float64,4}, Up::Array{Float64,3}, Uθ::Array{Float64,3}, moba::Array{Float64,3}, mobp::Array{Float64,2}, mobθ::Array{Float64,3}; Nx::Int64 =100, Nθ::Int64 =100 )
     Fa ::Array{Float64,4} = zeros(2,Nx,Nx,Nθ);
@@ -256,10 +262,10 @@ end
 ##
 
 function run_pde_until!(param::Dict{String,Any},density::Dict{String,Any},T; save_on =false, max_steps = 100, save_interval = 1.)
-    @unpack name, Nx, Nθ, λ, ρa, ρp, δt = param
+    @unpack name, Nx, Nθ, λ, ρa, ρp, δt, Dθ = param
     if save_on
         @unpack t = density
-        filename = "/store/DAMTP/jm2386/Active_Lattice/data/pde_raw/$(name)/Nx=$(Nx)_Nθ=$(Nθ)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_dt=$(δt)/time=$(round(t; digits = 3))_Nx=$(Nx)_Nθ=$(Nθ)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_dt=$(δt).jld2";
+        filename = "/store/DAMTP/jm2386/Active_Lattice/data/pde_raw/$(name)/Nx=$(Nx)_Nθ=$(Nθ)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_dt=$(δt)_Dθ=$(Dθ)/time=$(round(t; digits = 2))_Nx=$(Nx)_Nθ=$(Nθ)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_dt=$(δt)_Dθ=$(Dθ).jld2";
         safesave(filename,density)
     end
     if max_steps == false
@@ -271,7 +277,7 @@ function run_pde_until!(param::Dict{String,Any},density::Dict{String,Any},T; sav
                 end
                 if save_on
                     @unpack t = density
-                    filename = "/store/DAMTP/jm2386/Active_Lattice/data/pde_raw/$(name)/Nx=$(Nx)_Nθ=$(Nθ)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_dt=$(δt)/time=$(round(t; digits = 3))_Nx=$(Nx)_Nθ=$(Nθ)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_dt=$(δt).jld2";
+                    filename = "/store/DAMTP/jm2386/Active_Lattice/data/pde_raw/$(name)/Nx=$(Nx)_Nθ=$(Nθ)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_dt=$(δt)_Dθ=$(Dθ)/time=$(round(t; digits = 2))_Nx=$(Nx)_Nθ=$(Nθ)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_dt=$(δt)_Dθ=$(Dθ).jld2";
                     safesave(filename,density)
                 end
             end
@@ -286,7 +292,7 @@ function run_pde_until!(param::Dict{String,Any},density::Dict{String,Any},T; sav
             end
             if save_on
                 @unpack t = density
-                filename = "/store/DAMTP/jm2386/Active_Lattice/data/pde_raw/$(name)/Nx=$(Nx)_Nθ=$(Nθ)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_dt=$(δt)/time=$(round(t; digits = 3))_Nx=$(Nx)_Nθ=$(Nθ)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_dt=$(δt).jld2";
+                filename = "/store/DAMTP/jm2386/Active_Lattice/data/pde_raw/$(name)/Nx=$(Nx)_Nθ=$(Nθ)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_dt=$(δt)_Dθ=$(Dθ)/time=$(round(t; digits = 2))_Nx=$(Nx)_Nθ=$(Nθ)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_dt=$(δt)_Dθ=$(Dθ).jld2";
                 safesave(filename,density)
             end
         end
@@ -344,9 +350,9 @@ function perturb_pde!(param::Dict{String,Any}, density::Dict{String,Any}; δ = 0
 end
 
 function perturb_pde_run(param)
-    @unpack T, save_interval, max_steps = param
+    @unpack T, save_interval, max_steps, pert = param
     density = initialize_density(param)
-    perturb_pde!(param,density);
+    perturb_pde!(param,density; pert = pert);
     run_pde_until!(param,density,T; save_on = true, max_steps = max_steps, save_interval = save_interval)
 end
 
@@ -377,7 +383,7 @@ function load_pdes(param::Dict{String,Any},T; save_interval = 1., start_time = 0
     t_saves = []
     while t ≤ T
         try 
-            filename = "/store/DAMTP/jm2386/Active_Lattice/data/pde_raw/$(name)/Nx=$(Nx)_Nθ=$(Nθ)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_dt=$(δt)/time=$(round(t; digits = 3))_Nx=$(Nx)_Nθ=$(Nθ)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_dt=$(δt).jld2";
+            filename = "/store/DAMTP/jm2386/Active_Lattice/data/pde_raw/$(name)/Nx=$(Nx)_Nθ=$(Nθ)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_dt=$(δt)_Dθ=$(Dθ)/time=$(round(t; digits = 2))_Nx=$(Nx)_Nθ=$(Nθ)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_dt=$(δt)_Dθ=$(Dθ).jld2";
             data = wload(filename)
             push!(t_saves,data["t"])
             push!(fa_saves,data["fa"])
@@ -399,7 +405,7 @@ function λsym(ϕ::Float64; Dθ::Float64 = 10., Dx = 1.)
 end
 
 function refresh_stab_data(;stabdata = Dict{String,Any}(), ρs = 0.05:0.05:0.95,   Dθ = 10., Nx = 50, Nθ = 20, λs = 5.:5.:100., name = "high_density_stability_v4", save_on = true)
-    filename = "/store/DAMTP/jm2386/Active_Lattice/data/pde_pro/$(name)/stability_Nx=$(Nx)_Nθ=$(Nθ).jld2"
+    filename = "/store/DAMTP/jm2386/Active_Lattice/data/pde_pro/$(name)/stability_Nx=$(Nx)_Nθ=$(Nθ)_Dθ=$(Dθ).jld2"
 
     if save_on
         try 
@@ -553,12 +559,12 @@ end
 
 function run_stab_search_stupid_mode(param)
     @unpack name, Nx, Nθ, max_runs, λ_step, ρa, Dθ, Nx, Nθ, λmax, λs = param
-    filename = "/store/DAMTP/jm2386/Active_Lattice/data/pde_pro/$(name)/stability_Nx=$(Nx)_Nθ=$(Nθ).jld2"
+    filename = "/store/DAMTP/jm2386/Active_Lattice/data/pde_pro/$(name)/stability_Nx=$(Nx)_Nθ=$(Nθ)_Dθ=$(Dθ).jld2"
     stabdata = Dict{String,Any}()
     try 
         stabdata = wload(filename)
     catch
-        println(" error for ρ = $(ρa)")
+        println(" no save for ρ = $(ρa)")
         host = gethostname()
         println(host)
     end
@@ -577,136 +583,7 @@ function run_stab_search_stupid_mode(param)
         println("iteration = $(i)")
     end
     println("i am done")
-
-    return ρa, stabdata["ρ = $(ρa)"]
 end
 #
 
 println("booted")
-
-#Example 
-#=
-#Parameters
-name = "random_test"
-ρa = 0.6
-λ = 300.
-t = 0.701
-Dθ = 100.
-Nx = 20
-param = pde_param(;name = name, 
-        λ = λ , ρa = ρa, ρp = 0., T = 1.0, Dθ = Dθ, δt = 1e-5, Nx = Nx, Nθ = 20, save_interval = 0.01, max_steps = 1e8
-)
-
-density = initialize_density(param)
-@unpack name, D, λ, ρa, ρp, δt, Nx, Nθ, S = param
-@unpack fa, fp, t = density
-perturb_pde!(param,density; pert = "n=1")
-for i in 1:100 pde_step!(param,density) end
-ρ = fp + 2*π*sum(fa;dims = 3)[:,:,1]/Nθ
-p.(ρ)
-
-@unpack T, save_interval, max_steps = param
-T = 0.5
-density = initialize_density(param)
-perturb_pde!(param,density; pert = "rand", δ = 0.5);
-
-run_pde_until!(param,density,T; save_on = true, max_steps = max_steps, save_interval = save_interval)
-
-midpoint_bond_diff(fp; Nx = Nx)
-midpoint_bond_diff_θ(fa;  Nx = Nx,  Nθ = Nθ)
-midpoint_bond_av(coeff_mag_s(fa,ρ); Nx =Nx )
-
-@time for i in 1:10 pde_step!(param,density) end
-
-fig, ax = PyPlot.subplots(figsize =(10, 10))
-plot_pde_mass(fig,ax,param,density)
-#plot_pde_mag(fig,ax,param,density)
-display(fig)
-
-fig, ax = PyPlot.subplots(figsize =(10, 10))
-#plot_pde_mass(fig,ax,param,density)
-plot_pde_mag(fig,ax,param,density)
-display(fig)
-
-t = 0.0
-
-@unpack name, Nx, Nθ, λ, ρa, ρp, δt = param
-        filename = "/store/DAMTP/jm2386/Active_Lattice/data/pde_raw/$(name)/Nx=$(Nx)_Nθ=$(Nθ)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_dt=$(δt)/time=$(round(t; digits = 4))_Nx=$(Nx)_Nθ=$(Nθ)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_dt=$(δt).jld2";
-        data = wload(filename)
-        fa = data["fa"]
-        fp = data["fp"]
-        #t = data["t"]
-        @pack! density = fa, fp, t
-        fig, ax = PyPlot.subplots(figsize =(10, 10))
-        plot_pde_mass(fig,ax,param,density)
-        #plot_pde_mag(fig,ax,param,density)
-display(fig)
-t += 0.01
-
-magx = []
-magy = []
-for t= 0.:0.01:0.4
-    filename = "/store/DAMTP/jm2386/Active_Lattice/data/pde_raw/$(name)/Nx=$(Nx)_Nθ=$(Nθ)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_dt=$(δt)/time=$(round(t; digits = 4))_Nx=$(Nx)_Nθ=$(Nθ)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_dt=$(δt).jld2";
-    data = wload(filename)
-    fa = data["fa"]
-    m  = mag(fa; Nθ = Nθ, Nx =Nx)
-    av_m = sum(m; dims = (2,3))/(Nx*Nx)
-    push!(magx, av_m[1])
-    push!(magy, av_m[2])
-end
-fig, ax = PyPlot.subplots(figsize =(10, 10))
-ax.plot(0.:0.01:0.4,magx)
-ax.plot(0.:0.01:0.4,magy)
-display(fig)
-
-@unpack fa, fp, t = density
-dist_from_unif(param,fa,fp)
-
-#expand variables
-@unpack name, D, λ, ρa, ρp, δt, Nx, Nθ, S = param
-@unpack fa, fp, t = density
-#Run and save
-run_pde_until!(param,density,0.002; save_on = true, max_steps = 20, save_interval = 0.001)
-#for pmap
-param = pde_param(λ = 0, T = 0.003, name = "test8")
-perturb_pde_run(param; max_steps = 60, save_interval = 0.0005)
-#Loading
-t_saves, fa_saves, fp_saves = load_pdes(param,0.003; save_interval = 0.0005)
-dist_saves = time_dist_from_unif(param, fa_saves, fp_saves)
-#plotting
-fig, ax = PyPlot.subplots(figsize =(10, 10))
-y = self_diff.(x)
-ax.plot(y)
-display(fig)
-density = initialize_density(param)
-n = 1#length(t_saves)
-t, fa, fp = t_saves[n], fa_saves[n], fp_saves[n]
-@pack! density = fa, fp, t
-#
-pde_step!(param,density)
-fig, ax = PyPlot.subplots(figsize =(10, 10))
-plot_pde_mass(fig,ax,param,density)
-display(fig)
-#
-fig, ax = PyPlot.subplots(figsize =(10, 10))
-plot_pde_mag(fig,ax,param,density)
-display(fig)
-#
-fig, ax = PyPlot.subplots(figsize =(10, 10))
-ax.plot(t_saves,dist_saves)
-display(fig)
-##
-pde_step!(param,density)
-@unpack fa, fp, t = density
-dist_from_unif(param,fa,fp)
-
-
-for x₂ in 1:Nx
-        local dsx, ρx, magx, y₁,y₂
-        ## 2 direction
-
-        y₂ = (x₂ +Nx)%Nx +1
-
-        println(y₂)
-end
-=#

@@ -41,18 +41,26 @@ function plot_pde_mag(fig::Figure, ax::PyObject, param::Dict{String,Any}, densit
         #ax.yaxis.set_ticks([])
         ax.axis([Δx, 1., Δx, 1.])
         ax.set_aspect("equal")
-        ax.set_title("ρₐ = $(ρa),  ρₚ = $(ρp), Pe = $(λ), t = $(t)")
+        #ax.set_title("ρₐ = $(ρa),  ρₚ = $(ρp), Pe = $(λ), t = $(t)")
     # Plot points
-    cp = ax.contourf(Δx:Δx:1, Δx:Δx:1,absmag; levels = 100, set_cmap = winter() )
-    fig.colorbar(cp)
-    #fig
+    colmap = PyPlot.plt.cm.viridis_r
+    x = Δx:Δx:1
+    y = Δx:Δx:1
+    xx = [x̃ for x̃ ∈ x, ỹ ∈ y]'
+    yy = [ỹ for x̃ ∈ x, ỹ ∈ y]'
+    ax.streamplot(xx, yy, m[:,:,1]', m[:,:,2]', color = absmag', cmap = colmap, density = 2.5)
+    norm1 = matplotlib.colors.Normalize(vmin=minimum(absmag), vmax= maximum(absmag));
+    fig.colorbar(matplotlib.cm.ScalarMappable(norm=norm1, cmap = colmap), ax = ax, fraction = 0.0455)
+    #display(fig)
     return fig
 end 
 
 function plot_pde_mass(fig::Figure, ax::PyObject, param::Dict{String,Any}, density::Dict{String,Any})
     @unpack λ, Nx, Nθ, S, ρa, ρp= param
     @unpack fa, fp, t = density
-    #fig, ax = PyPlot.subplots(figsize =(10, 10))
+    #=
+    fig, ax = PyPlot.subplots(figsize =(10, 10))
+    =#
     #collect data
     eθ = [cos.(S*2π/Nθ) sin.(S*2π/Nθ)]
     @tensor begin
@@ -65,13 +73,15 @@ function plot_pde_mass(fig::Figure, ax::PyObject, param::Dict{String,Any}, densi
     Δx = 1/Nx
     #figure configuration
     #ax.xaxis.set_ticks([])
-        #ax.yaxis.set_ticks([])
-        ax.axis([Δx, 1., Δx, 1.])
-        ax.set_aspect("equal")
-        ax.set_title("ρₐ = $(ρa),  ρₚ = $(ρp), Pe = $(λ), t = $(t)")
+    #ax.yaxis.set_ticks([])
+    ax.axis([Δx, 1., Δx, 1.])
+    ax.set_aspect("equal")
+    #ax.set_title("ρₐ = $(ρa),  ρₚ = $(ρp), Pe = $(λ), t = $(t)")
     # Plot points
-    cp = ax.contourf(Δx:Δx:1, Δx:Δx:1,ρ; levels = 100, set_cmap = winter() )
-    fig.colorbar(cp)
+    colmap = PyPlot.plt.cm.viridis_r
+    norm1 = matplotlib.colors.Normalize(vmin=0, vmax= 1. );
+    ax.contourf(Δx:Δx:1, Δx:Δx:1,ρ'; levels = 25, norm = norm1, cmap = colmap )
+    fig.colorbar(matplotlib.cm.ScalarMappable(norm=norm1, cmap = colmap), ax = ax, fraction = 0.0455)
     #fig
     return fig
 end 
@@ -83,6 +93,21 @@ function plot_error(fig::Figure, ax::PyObject,param, t_saves, fa_saves, fp_saves
     ax.set_title("ρₐ = $(ρa), Pe = $(λ)")
     ax.axis([0, t_max, 0., y_max])
 end
+
+#=
+fig, axs = plt.subplots(1, 2, figsize=(12,5))
+plot_pde(fig,axs,param,density)
+display(fig)
+=#
+function plot_pde(fig::Figure, axs ::Array{PyObject,1} , param::Dict{String,Any}, density::Dict{String,Any})
+    @unpack λ, Nx, Nθ, S, ρa, ρp, Dθ= param
+    @unpack fa, fp, t = density
+    plot_pde_mass(fig,axs[1],param,density)
+    plot_pde_mag( fig,axs[2],param,density)
+    l = 1/sqrt(Dθ)
+    fig.suptitle("ρₐ = $(ρa),  ρₚ = $(ρp), Pe = $(round(λ/sqrt(Dθ); digits = 3)), l = $(round(l; digits = 3)), t = $(round(t; digits = 3))",size  =15. )
+    return fig
+end 
 
 function plot_stab(fig, ax, stabdata; ρs = 0.05:0.05:0.95 ,xs = collect(0.01:0.01:0.99), xtic = 0:0.2:1, ytic = 0:10:100, axlim = [0., 1., 0., 100.], Dθ = 10. )
     stable_points = []

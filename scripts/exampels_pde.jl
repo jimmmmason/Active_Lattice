@@ -21,3 +21,21 @@ plot_stab(fig, ax, stabdata; ρs = 0.05:0.05:0.95 ,xs = collect(0.01:0.01:0.99),
 display(fig)
 
 refresh_stab_data(; ρs = [0.6], Dθ = Dθ, Nx = 50, Nθ = 20, λs = λs, name = name)
+
+
+
+using SymPy
+const sympy_parsing_mathematica = SymPy.PyCall.pyimport("sympy.parsing.mathematica")
+mathematica2julia(s::AbstractString, substitutions::Pair{<:AbstractString,<:AbstractString}...) = SymPy.lambdify(sympy_parsing_mathematica["mathematica"](s, Dict(substitutions...)))
+
+SymPy.lambdify()
+
+f = sympy_parsing_mathematica["mathematica"](" Sqrt[((-2 + pi)/((-1 + pi) (26 + (-11 + pi) pi)))]x")
+g = lambdify(f)
+g(1)
+
+x = 1
+g.([1])
+
+mathematica2julia("Log[Log[x]]")
+mathematica2julia(" Sqrt[((-2 + pi)/((-1 + pi) (26 + (-11 + pi) pi)))]x")
