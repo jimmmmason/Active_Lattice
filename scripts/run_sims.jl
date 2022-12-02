@@ -7,11 +7,14 @@ include("/home/jm2386/Active_Lattice/src/sim_functions.jl")
 
 #varying parameters
 params = []
-name = "cross_density_hist_data_4"
-for ρ in [0.8]
-for λ in [10,12,14,16,18,20]
+name = "comparison"
+Dθ =100.
+Pes = [2, 2.5, 3, 3.5]
+λs = Pes*2/sqrt(Dθ)
+for ρ in [0.7]
+for λ in λs
         local param
-        param = extra_mixing_initial_param(; name = name, λ = λ ,ρa = ρ, ρp = 0., L = 128, Δt = 0.01, γ = 0., T = 3.)
+        param = extra_mixing_initial_param(; name = name, λ = λ ,ρa = ρ, ρp = 0., L = 128, Δt = 0.01, γ = 0., T = 3.,Dθ =Dθ)
         push!(params,param)
 end
 end
@@ -55,7 +58,7 @@ PyPlot.savefig("translation_invariance_ρ=$(ρ).pdf",dpi = 300, format = "pdf")
 end
 #load plots 
 PyPlot.close()
-fig = figure(figsize=(10,10))
+fig = figure(figsize=(10,10))  
 i =1
 name = "cross_density_hist_data_4"
 t = 2.0
@@ -64,7 +67,7 @@ r = 7
 for ρ in [0.8]
 for λ in [10, 12,14,16]
     ax = fig[:add_subplot](2,2,i)
-    param = extra_mixing_initial_param(; name = name, λ = λ ,ρa = ρ, ρp = 0., L=L, Δt = 0.01, γ = 0., T = 1.0)
+    param = extra_mixing_initial_param(; name = name, λ = λ ,ρa = ρ, ρp = 0., L=L, Δt = 0.01, γ = 0., T = 1.0,Dθ =100.)
     @unpack name, L, λ, γ, ρa, ρp, Δt, Dθ = param
     filename = "/store/DAMTP/jm2386/Active_Lattice/data/sims_raw/$(name)/size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ)_Δt=$(Δt)_Dθ=$(Dθ)/time=$(round(t; digits = 2))_size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ)_Dθ=$(Dθ)/time=$(round(t; digits = 2))_size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ)_Dθ=$(Dθ).jld2";
     η, t = wload(filename, "η", "t")
@@ -97,7 +100,7 @@ r = 4
 for ρ in [0.8]
 for λ in [10, 12,14,16]
     ax = fig[:add_subplot](2,2,i)
-    param = extra_mixing_initial_param(; name = name, λ = λ ,ρa = ρ, ρp = 0., L=L, Δt = 0.01, γ = 0., T = 3.0)
+    param = extra_mixing_initial_param(; name = name, λ = λ ,ρa = ρ, ρp = 0., L=L, Δt = 0.01, γ = 0., T = 3.0,Dθ =100.)
     t_saves , η_saves = load_etas(param, t_end; dump_interval = 0.1, start_time = t_start);
     time_density_hist(fig, ax, param, t_saves, η_saves; r = r, bins = (2*r+1)^2 )
     #=

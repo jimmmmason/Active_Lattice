@@ -48,7 +48,7 @@ function plot_pde_mag(fig::Figure, ax::PyObject, param::Dict{String,Any}, densit
     y = Δx:Δx:1
     xx = [x̃ for x̃ ∈ x, ỹ ∈ y]'
     yy = [ỹ for x̃ ∈ x, ỹ ∈ y]'
-    ax.streamplot(xx, yy, m[:,:,1]', m[:,:,2]', color = absmag', cmap = colmap, density = 2.5)
+    ax.streamplot(xx, yy, m[:,:,1]', m[:,:,2]', color = absmag', cmap = colmap, density = 1)#2.5
     norm1 = matplotlib.colors.Normalize(vmin=minimum(absmag), vmax= maximum(absmag));
     fig.colorbar(matplotlib.cm.ScalarMappable(norm=norm1, cmap = colmap), ax = ax, fraction = 0.0455)
     #display(fig)
@@ -109,23 +109,27 @@ function plot_pde(fig::Figure, axs ::Array{PyObject,1} , param::Dict{String,Any}
     return fig
 end 
 
-function plot_stab(fig, ax, stabdata; ρs = 0.05:0.05:0.95 ,xs = collect(0.01:0.01:0.99), xtic = 0:0.2:1, ytic = 0:10:100, axlim = [0., 1., 0., 100.], Dθ = 10. )
+function plot_stab(fig, ax, stabdata; ρs = 0.05:0.05:0.95 ,xs = collect(0.01:0.01:0.99), ys =  collect(0.0:0.1:100.),xtic = 0:0.2:1, ytic = 0:10:100, axlim = [0., 1., 0., 100.], Dθ = 100., Dx =1. )
     stable_points = []
+    lin_stable_points = []
     unstable_points = []
     unsure_points = []
     binodal_y = Array{Float64,1}([])
     binodal_x = Array{Float64,1}([])
     for ρ in ρs
-            @unpack stable, unstable, unsure = stabdata["ρ = $(ρ)"]
+            @unpack stable, lin_stab, unstable, unsure = stabdata["ρ = $(ρ)"]
             for λ ∈ stable
-                    append!(stable_points,  [ρ; λ])
+                    append!(stable_points,  [ρ; λ/sqrt(Dθ)])
                     
             end
+            for λ ∈ lin_stab
+                append!(lin_stable_points,  [ρ; λ/sqrt(Dθ)])
+            end
             for λ ∈ unstable
-                    append!(unstable_points, [ρ; λ])
+                    append!(unstable_points, [ρ; λ/sqrt(Dθ)])
             end
             for λ ∈ unsure
-                    append!(unsure_points, [ρ; λ])
+                    append!(unsure_points, [ρ; λ/sqrt(Dθ)])
             end
             try
                 local y
@@ -136,11 +140,24 @@ function plot_stab(fig, ax, stabdata; ρs = 0.05:0.05:0.95 ,xs = collect(0.01:0.
             end
     end             
     stable_points   = reshape(stable_points, (2,Int64(length(stable_points)/2)) )
+    lin_stable_points   = reshape(stable_points, (2,Int64(length(stable_points)/2)) )
     unstable_points = reshape(unstable_points, (2,Int64(length(unstable_points)/2)) )
     unsure_points = reshape(unsure_points, (2,Int64(length(unsure_points)/2)) )
 
-    lower_bound = λsym.(xs; Dθ = Dθ)
+    #=
+    lower_bound = λsym.(xs; Dθ = Dθ)/sqrt(Dθ)
     ax.plot(xs,lower_bound, color = "black")
+    =#
+    #=
+    n = length(xs)
+    m = length(ys)
+    zs = zeros(m,n)
+    for i in 1:m, j in 1:n
+        zs[i,j] = Stability_condition.(xs[j],Dx,ys[i],Dθ)
+    end
+
+    ax.contour(xs,ys,zs; levels = [0])
+    =#
 
     #=
     fit = curve_fit(RationalPoly, collect(binodal_x), collect(binodal_y), 2,2)
@@ -149,6 +166,13 @@ function plot_stab(fig, ax, stabdata; ρs = 0.05:0.05:0.95 ,xs = collect(0.01:0.
     =#
     
     ax.errorbar(stable_points[1,:],stable_points[2,:], 
+    #markersize = 400/L, 
+    fmt= "o", 
+    color = "yellow",
+    alpha=0.8,
+    )
+
+    ax.errorbar(lin_stable_points[1,:],stable_points[2,:], 
     #markersize = 400/L, 
     fmt= "o", 
     color = "green",
@@ -172,8 +196,30 @@ function plot_stab(fig, ax, stabdata; ρs = 0.05:0.05:0.95 ,xs = collect(0.01:0.
     ax.xaxis.set_ticks(xtic)
     ax.yaxis.set_ticks(ytic)
     ax.axis(axlim)
-    #ax.set_title("ρₐ = $(ρa),  ρₚ = $(ρp), λ = $(λ), t = $(t), Φ = $(Φ)")
-
+    ax.set_xlabel("ρ")
+    ax.set_ylabel("Pe")
+    ax.set_title("Dθ = $(Dθ)")
 end
+
+function Stability_condition(ϕ,Dx,Pe,Dθ)
+    v0 = Pe*sqrt(Dθ);
+    ds = self_diff(ϕ);
+    dp = self_diff_prime(ϕ);
+    c1 = Dx *ds;
+    c2 = Dx *(1 - ds)/(2*π);
+    c3 = -   v0 * (1 - ϕ - ds);
+    c4 = -   v0 * (dp*ϕ)/2;
+    c5 = -   v0*(ds)/2;
+    c6 = Dθ; 
+    ω2 = (2*π)^2; 
+    μ = c1*ω2 + c6;
+    μ0 = c1*ω2;
+    var1 = 1 + (μ^2)/( 2*ω2*c5^2);
+    Λ = -var1 + sqrt(var1^2 - 1); 
+    return μ - (- ω2*(c4 + c5)*(c3 + c5)/(μ0 + c2*ω2) - ω2*(1 + Λ )/μ)
+end
+
+
+
 
 println("booted")

@@ -343,4 +343,25 @@ y0b = fit.(x)
 unfinished, next, param = next_param(stabdata, param; λmax = 105., λ_step = 5.)
 
 
-λsym(0.9; Dθ=100., Dx=1. 
+λsym(0.9; Dθ=100., Dx=1. )
+
+
+
+ρ = fp + sum(fa; dims =3)[:,:,1].*(2*π/Nθ)
+    
+    Ua,   Up,   Uθ::Array{Float64,3}   = U_apθ(fa,fp,ρ; Nx=Nx, Nθ=Nθ, λ=λ)
+    moba::Array{Float64,3}, mobp::Array{Float64,2}, mobθ::Array{Float64,3} = mob(fa,fp,ρ)
+    Fa::Array{Float64,4},   Fp::Array{Float64,3},   Fθ::Array{Float64,3}   = F_apθ(Ua, Up, Uθ, moba, mobp, mobθ; Nx=Nx, Nθ=Nθ)
+    
+    a::Float64 = maximum(abs.(Ua));
+    b::Float64 = maximum(abs.(Up));
+    c::Float64 = maximum(abs.(Uθ));
+    
+    tempu::Float64 = 1/(6*max(a*Nx, b*Nx, c*Nθ*Dθ/(2*π)));
+    dt::Float64= min(δt, tempu)
+
+    fa -= dt*( site_div_θ(Fa; Nx=Nx, Nθ=Nθ) + Dθ*site_θ_diff(Fθ; Nx=Nx, Nθ=Nθ))
+    fp -= dt*site_div(Fp; Nx=Nx)
+
+
+
