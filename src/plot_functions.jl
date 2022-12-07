@@ -8,18 +8,19 @@ println("Loading ...")
 using TensorOperations, PyPlot, PyCall
 @pyimport matplotlib.animation as anim
 
-function animate_pdes(param,t_saves,pde_saves)
-    @unpack name, L, λ, ρa, ρp, Δt = param
-    frames = length(η_saves)-1
-    fig, ax = PyPlot.subplots(figsize =(10, 10))
-    makeframe(i) = plot_eta(fig,ax,param, t_saves[i+1], η_saves[i+1])
-    interval = Int64(round(5/Δt))
+function animate_pdes(param,t_saves,fa_saves,fp_saves)
+    @unpack name, λ, ρa, ρp,Nx, Nθ, δt = param
+    frames = length(t_saves)-1
+    fig, axs = plt.subplots(1, 2, figsize=(12,5))
+    makeframe(i) = plot_pde_lite(fig,axs,param, t_saves[i+1], fa_saves[i+1], fp_saves[i+1])
+    interval = Int64(round(5/δt))
     myanim = anim.FuncAnimation(fig, makeframe, frames=frames, interval=interval)
     # Convert it to an MP4 movie file and saved on disk in this format.
-    pathname = "/home/jm2386/Active_Lattice/plots/pde_vids/$(name)/active=$(ρa)_passive=$(ρp)_lamb=$(λ)_Δt=$(Δt)";
+    T = t_saves[frames+1]
+    pathname = "/store/DAMTP/jm2386/Active_Lattice/plots/vids/pde_vids/$(name)/active=$(ρa)_passive=$(ρp)_lamb=$(λ)";
     mkpath(pathname)
-    filename = "/home/jm2386/Active_Lattice/plots/pde_vids/$(name)/active=$(ρa)_passive=$(ρp)_lamb=$(λ)_Δt=$(Δt)/time=$(round(T; digits = 5))_size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ).mp4";
-    myanim[:save](filename, bitrate=-1, dπ= 100, extra_args=["-vcodec", "libx264", "-πx_fmt", "yuv420p"])
+    filename = "/store/DAMTP/jm2386/Active_Lattice/plots/vids/pde_vids/$(name)/active=$(ρa)_passive=$(ρp)_lamb=$(λ)/time=$(round(T; digits = 5))_Nx=$(Nx)_Nθ=$(Nθ)_active=$(ρa)_passive=$(ρp)_lamb=$(λ).mp4";
+    myanim[:save](filename, bitrate=-1, dpi= 100, extra_args=["-vcodec", "libx264", "-pix_fmt", "yuv420p"])
 end 
 
 function plot_pde_mag(fig::Figure, ax::PyObject, param::Dict{String,Any}, density::Dict{String,Any})
@@ -53,7 +54,7 @@ function plot_pde_mag(fig::Figure, ax::PyObject, param::Dict{String,Any}, densit
     fig.colorbar(matplotlib.cm.ScalarMappable(norm=norm1, cmap = colmap), ax = ax, fraction = 0.0455)
     #display(fig)
     return fig
-end 
+end
 
 function plot_pde_mass(fig::Figure, ax::PyObject, param::Dict{String,Any}, density::Dict{String,Any})
     @unpack λ, Nx, Nθ, S, ρa, ρp= param
@@ -66,7 +67,7 @@ function plot_pde_mass(fig::Figure, ax::PyObject, param::Dict{String,Any}, densi
     @tensor begin
         m[a,b,d] := 2π *fa[a,b,θ]*eθ[θ,d]/Nθ
     end
-    ρ = fp + sum(fa; dims =3)[:,:,1].*(2*π/Nθ)
+    ρ = fp #+ sum(fa; dims =3)[:,:,1].*(2*π/Nθ)
     #absmag  = sqrt.(m[:,:,1].^2+m[:,:,2].^2)
     t = round(t; digits=5)
     #Φ = round(translation_invariance(η;Ω = Ω,L= L); digits =4)
@@ -109,7 +110,19 @@ function plot_pde(fig::Figure, axs ::Array{PyObject,1} , param::Dict{String,Any}
     return fig
 end 
 
-function plot_stab(fig, ax, stabdata; ρs = 0.05:0.05:0.95 ,xs = collect(0.01:0.01:0.99), ys =  collect(0.0:0.1:100.),xtic = 0:0.2:1, ytic = 0:10:100, axlim = [0., 1., 0., 100.], Dθ = 100., Dx =1. )
+function plot_pde_lite(fig::Figure, axs ::Array{PyObject,1} , param::Dict{String,Any}, t, fa, fp )
+    @unpack λ, Nx, Nθ, S, ρa, ρp, Dθ= param
+    density = Dict{String,Any}()
+    @pack! density = fa, fp, t
+    plot_pde_mass(fig,axs[1],param,density)
+    plot_pde_mag( fig,axs[2],param,density)
+    l = 1/sqrt(Dθ)
+    fig.suptitle("ρₐ = $(ρa),  ρₚ = $(ρp), Pe = $(round(λ/sqrt(Dθ); digits = 3)), l = $(round(l; digits = 3)), t = $(round(t; digits = 3))",size  =15. )
+    return fig
+end 
+
+
+function plot_stab(fig, ax, stabdata; ρs = 0.05:0.05:0.95 ,xs = collect(0.01:0.01:0.99), ys =  collect(0.0:0.1:100.),xtic = 0:0.2:1, ytic = 0:10:100, axlim = [0., 1., 0., 100.], Dθ = 100., Dx =1.,ρp = 0. )
     stable_points = []
     lin_stable_points = []
     unstable_points = []
@@ -119,17 +132,17 @@ function plot_stab(fig, ax, stabdata; ρs = 0.05:0.05:0.95 ,xs = collect(0.01:0.
     for ρ in ρs
             @unpack stable, lin_stab, unstable, unsure = stabdata["ρ = $(ρ)"]
             for λ ∈ stable
-                    append!(stable_points,  [ρ; λ/sqrt(Dθ)])
+                    append!(stable_points,  [ρ-ρp; λ/sqrt(Dθ)])
                     
             end
             for λ ∈ lin_stab
-                append!(lin_stable_points,  [ρ; λ/sqrt(Dθ)])
+                append!(lin_stable_points,  [ρ-ρp; λ/sqrt(Dθ)])
             end
             for λ ∈ unstable
-                    append!(unstable_points, [ρ; λ/sqrt(Dθ)])
+                    append!(unstable_points, [ρ-ρp; λ/sqrt(Dθ)])
             end
             for λ ∈ unsure
-                    append!(unsure_points, [ρ; λ/sqrt(Dθ)])
+                    append!(unsure_points, [ρ-ρp; λ/sqrt(Dθ)])
             end
             try
                 local y
@@ -148,16 +161,17 @@ function plot_stab(fig, ax, stabdata; ρs = 0.05:0.05:0.95 ,xs = collect(0.01:0.
     lower_bound = λsym.(xs; Dθ = Dθ)/sqrt(Dθ)
     ax.plot(xs,lower_bound, color = "black")
     =#
-    #=
-    n = length(xs)
-    m = length(ys)
-    zs = zeros(m,n)
+    
+    x = xs
+    y = ys
+    n = length(x)
+    m = length(y)
+    z = zeros(m,n)
     for i in 1:m, j in 1:n
-        zs[i,j] = Stability_condition.(xs[j],Dx,ys[i],Dθ)
+        z[i,j] = ap_lin_stab_line(x[j]-ρp,ρp; Dx =Dx ,Pe = y[i], Dθ = Dθ)
     end
-
-    ax.contour(xs,ys,zs; levels = [0])
-    =#
+    ax.contour(x.+(-ρp),y,z; levels = [0])
+    
 
     #=
     fit = curve_fit(RationalPoly, collect(binodal_x), collect(binodal_y), 2,2)
@@ -196,9 +210,9 @@ function plot_stab(fig, ax, stabdata; ρs = 0.05:0.05:0.95 ,xs = collect(0.01:0.
     ax.xaxis.set_ticks(xtic)
     ax.yaxis.set_ticks(ytic)
     ax.axis(axlim)
-    ax.set_xlabel("ρ")
+    ax.set_xlabel("ρa")
     ax.set_ylabel("Pe")
-    ax.set_title("Dθ = $(Dθ)")
+    ax.set_title("Dθ= $(Dθ), ρᵖ = $(ρp)")
 end
 
 function Stability_condition(ϕ,Dx,Pe,Dθ)

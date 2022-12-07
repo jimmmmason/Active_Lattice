@@ -4,21 +4,21 @@ using DrWatson
 include("/home/jm2386/Active_Lattice/src/pde_functions_1d.jl")
 include("/home/jm2386/Active_Lattice/src/plot_functions.jl")
 ###
-name = "stability_1d_rand"
-Pe = 2.5
-ρa = 0.85
-Dθ = 100.
+name = "stability_1d_actpass_2"
+Pe = 30.
+ρa = 0.55
+Dθ = 1.
+ρp = 0.2
     δ = 1e-2
     δt = 1e-5
     T  = 1.0
     save_interval = 0.01
     Nx = 50
-Nθ = 20
+    Nθ = 20
 
 param = pde_param_1d(; 
-    name = name, ρa = ρa, ρp = 0., Pe = Pe, T = T, Dθ = Dθ, δt = δt, Nx = Nx, Nθ = Nθ, save_interval = save_interval, δ= δ
+    name = name, ρa = ρa, ρp = ρp, Pe = Pe, T = T, Dθ = Dθ, δt = δt, Nx = Nx, Nθ = Nθ, save_interval = save_interval, δ= δ
 )
-
 fig, ax = PyPlot.subplots(figsize =(10, 10))
 t_saves, fa_saves, fp_saves = load_pdes_1d(param,T; save_interval = 0.0001)
     dist_saves = time_dist_from_unif_1d(param, fa_saves, fp_saves)
@@ -28,52 +28,87 @@ t_saves, fa_saves, fp_saves = load_pdes_1d(param,T; save_interval = 0.0001)
     ax.set_title("Dθ = $(Dθ) ρ = $(ρa) Pe = $(Pe)")
 display(fig)
 
+lin_stab_line(0.4;Dx = Dx, Pe =Pe, Dθ = 1)
+
+#non-linear instability? 
+name = "stability_1d_5"
+Pe = 3.
+ρa = 0.6
+Dθ = 100.
+    δ = 1e-2
+    δt = 1e-5
+    T  = 0.4
+    save_interval = 0.01
+    Nx = 50
+    Nθ = 20
+#
+
+
 
 
 ####
 
 
 
-n = length(fa1_saves)
-fa1 = fa1_saves[n]
-
+n = length(fa_saves)
+fa = fa_saves[n]
+fp = fp_saves[n]
 
 param = pde_param(; 
     name = name, ρa = ρa, ρp = 0., Pe = Pe, T = T, Dθ = Dθ, δt = δt, Nx = Nx, Nθ = Nθ, save_interval = 0.0001, δ= δ
 )
 
+name = "stability_1d_actpass"
+Pe = 10.
+ρa = 0.45
+ρp = 0.1
+Dθ = 100.
+    δ = 1e-2
+    δt = 1e-5
+    T  = 1.0
+    save_interval = 0.01
+    Nx = 50
+    Nθ = 20
+
+param = pde_param_1d(; 
+    name = name, ρa = ρa, ρp = ρp, Pe = Pe, T = T, Dθ = Dθ, δt = δt, Nx = Nx, Nθ = Nθ, save_interval = save_interval, δ= δ
+)
 
 
-
-density1 = initialize_density_1d(param1)
-@unpack T, save_interval, max_steps, pert, δ = param1
-perturb_pde_1d!(param1,density1; pert = pert, δ = δ)
+density = initialize_density_1d(param)
+@unpack T, save_interval, max_steps, pert, δ = param
+perturb_pde_1d!(param,density; pert = pert, δ = δ)
+@unpack fa, fp, t = density
+fig, ax = PyPlot.subplots(figsize =(10, 10))
+ax.plot(fa)
+display(fig)
 
 density = initialize_density(param)
 #perturb_pde!(param,density; pert = "rand",δ = δ);
 perturb_pde!(param,density; pert = "n=1",δ = δ);
 
-@time for i in 1:100 pde_stepper_1d!(param1,density1) end 
+@time for i in 1:100 pde_stepper_1d!(param,density) end 
+
+@unpack fa = density
+maximum(fa)
 
 
 pde_stepper!(param,density)
 
-fa1 = density1["fa"]
-fp1 = density1["fp"]
-@unpack fa, fp, t = density1
+@unpack fa, fp, t = density
 maximum(abs.(fa1[:,:] - fa[:,1,:]))
 
-i = 10
-fa1 = fa1_saves[i]
+i = 1
+fa = fa_saves[i]
     fig, ax = PyPlot.subplots(figsize =(10, 10))
     #@unpack fa1, fp1, t = density1
     #ρ = sum(fa1; dims =2)[:,1].*(2*π/Nθ)
     #ax.plot(ρ)
     #fa1 = density1["fa"];
-    ax.plot(fa1)
+    ax.plot(fa)
     #ρ = sum(fa1; dims =2)[:,1].*(2*π/Nθ)
     #ax.plot(ρ)
-    i+=10
+    i+=1
 display(fig)
 
 

@@ -5,12 +5,14 @@ println("Loading ...")
 #runnning simulation
 using StatsBase, DataStructures, UnPack, LinearAlgebra, Random, TensorOperations, StaticArrays
 
+
 function pde_param_1d(; name = "test", D =1. , Pe =1. ,ρa = 0.5, ρp = 0.0, Nx = 100, Nθ = 100, δt = 1e-5, Dθ = 10, T= 0.001, save_interval = 0.01, max_steps = 1e8, max_runs = 6, λ_step = 10., λmax = 100., λs = 20.:20.:100., pert = "n=1", δ = 0.01)
     S  = [ θ for θ in 1:Nθ]
     E = [[1,0],[0,1],[0,-1],[-1,0],]
     λ = Pe*sqrt(Dθ)
+    Dx = D
     param = Dict{String,Any}()
-    @pack! param = name, D, λ, ρa, ρp, δt, Nx, Nθ, S,  E, Dθ, T, save_interval, max_steps, max_runs, λ_step, λmax, λs, pert, δ
+    @pack! param = name, D, λ, ρa, ρp, δt, Nx, Nθ, S,  E, Dθ, T, save_interval, max_steps, max_runs, λ_step, λmax, λs, pert, δ, Pe, Dx
     return param
 end
 
@@ -280,24 +282,33 @@ function run_pde_until_1d!(param::Dict{String,Any},density::Dict{String,Any},T; 
 end
 
 function perturb_pde_1d!(param::Dict{String,Any}, density::Dict{String,Any}; δ = 0.01, pert = "n=2")
-    @unpack Nx, S, ρa, ρp, λ, Dθ, Nx, Nθ = param
+    @unpack Nx, S, ρa, ρp, λ, Dθ, Nx, Nθ,Dx,Pe,Dθ = param
     @unpack fa, fp = density
     ρ = ρa + ρp
     if ρ >0.9
         δ = min(δ, (1 - ρ)/(2*π+0.01));
     end
     #from stability: 
-    α = π/2 -1
-        ds  = self_diff(ρ)
-        dsp = self_diff_prime(ρ)
-        β = 1- ds;
-        a = λ* ( (1-ρ-ds)/ρ - dsp) /2
     if pert == "n=1"
-        γ = -4*π^2
-        Λ = 1/2*(-Dθ + γ*β + sqrt(Dθ^2 + 2*Dθ*β*γ + (β*γ)^2 - 2*a^2*γ*ρa*ρ ) )
-        C = 2*π*ρa*(ρa + ρp)/ (Dθ + Λ)
-        Pa = (x,θ) ->  ρa*cos(2*π*x/Nx) - C*(sin(2*π*x/Nx)*cos(2π*θ/Nθ));
-        Pp = (x) ->  ρp*cos(2*π*x/Nx) ;
+        if ρp ==0.
+            k = 20
+            K = collect(0:1:(k-1))
+            ω = 2*π
+            q,m1,m2,γ = mstabparams_lite(ρa,ρ,Dx,Pe,Dθ)
+            matrix = MathieuMatrix(q,m1,m2; k=k);
+            _, A = MathieuEigen(matrix, γ);
+            B = 0.
+            Pa = (x,θ) -> real.( dot(A[:,1],cos.(θ*K*(2*π/Nθ)))*exp(im*x*ω/Nx) )
+            Pp = (x) -> B*cos(x*ω/Nx);
+        else
+            k = 15
+            K = collect(0:1:(k-1))
+            c,ω = ap_mstabparams_lite(ρa,ρp,Dx,Pe,Dθ)
+            matrix = ap_MathieuMatrix(c, ω; k=k)
+            _, A = ap_MathieuEigen(matrix)
+            Pa = (x,θ) -> real.( dot(A[2:1:(k+1),k+1],cos.(θ*K*(2*π/Nθ)))*exp(im*x*ω/Nx) )
+            Pp = (x) -> real.(A[1,1]*exp(im*x*ω/Nx));
+        end
     end
     if pert == "rand"
         Pa = (x,θ) -> δ*ρa*(( rand() - 0.5 )/(ρa+0.01))/(2*π);
@@ -333,7 +344,29 @@ end
 
 function dist_from_unif_1d(param, fa, fp)
     @unpack name, Nx, Nθ, λ, ρa, ρp, δt = param
-    return sqrt(2*π*sum( (fa .- ρa/(2*π) ).^2)/(Nx*Nθ)) + sqrt(sum( (fp .- ρp).^2)/(Nx))
+
+    grad_fa = midpoint_bond_diff_θ_1d(fa; Nx = Nx,  Nθ = Nθ) 
+    grad_fp =  midpoint_bond_diff_1d(fp; Nx = Nx)
+    grad_grad_fa = midpoint_bond_diff_θ_1d(grad_fa; Nx = Nx,  Nθ = Nθ) 
+    grad_grad_fp =  midpoint_bond_diff_1d(grad_fp; Nx = Nx) 
+
+    partialθ_fa = midpoint_Θ_diff_1d(fa; Nx = Nx,  Nθ = Nθ)
+    mixD_fa = midpoint_Θ_diff_1d(grad_fa; Nx = Nx,  Nθ = Nθ)
+    partial_partialθ_fa = midpoint_Θ_diff_1d(partialθ_fa; Nx = Nx,  Nθ = Nθ)
+
+    L2 = 2*π*sum( (fa .- ρa/(2*π) ).^2)/(Nx*Nθ) + sum( (fp .- ρp).^2)/(Nx)
+
+    H1x = 2*π*sum( (grad_fa ).^2)/(Nx*Nθ) + sum( (grad_fp).^2)/(Nx)
+
+    H1θ = 2*π*sum( (partialθ_fa ).^2)/(Nx*Nθ)
+
+    H2x = 2*π*sum( (grad_grad_fa ).^2)/(Nx*Nθ) + sum( (grad_grad_fp).^2)/(Nx)
+
+    H2θ = 2*π*sum( (partial_partialθ_fa ).^2)/(Nx*Nθ)
+
+    H2_mix = 2*π*sum( (mixD_fa ).^2)/(Nx*Nθ)
+
+    return sqrt( L2 + H1x + H1θ + H2x + H2θ + H2_mix) 
 end
 
 function time_dist_from_unif_1d(param, fa_saves, fp_saves)
@@ -380,8 +413,8 @@ function λsym(ϕ::Float64; Dθ::Float64 = 10., Dx = 1.)
     return  sqrt(8*Dx)*sqrt(1+2*α)*sqrt(expr1)/expr2
 end
 
-function refresh_stab_data_1d(;stabdata = Dict{String,Any}(), ρs = 0.05:0.05:0.95,   Dθ = 10., Nx = 50, Nθ = 20, λs = 5.:5.:100., name = "high_density_stability_v4", save_on = true, t_end = 1.0)
-    filename = "/store/DAMTP/jm2386/Active_Lattice/data/pde_pro/$(name)/stability_Nx=$(Nx)_Nθ=$(Nθ)_Dθ=$(Dθ).jld2"
+function refresh_stab_data_1d(;stabdata = Dict{String,Any}(), ρs = 0.05:0.05:0.95,   Dθ = 10., Nx = 50, Nθ = 20, λs = 5.:5.:100., name = "high_density_stability_v4", save_on = true, t_end = 1.0, ρp = 0.)
+    filename = "/store/DAMTP/jm2386/Active_Lattice/data/pde_pro/$(name)/stability_Nx=$(Nx)_Nθ=$(Nθ)_Dθ=$(Dθ)_ρp=$(ρp).jld2"
 
     if save_on
         try 
@@ -400,7 +433,7 @@ function refresh_stab_data_1d(;stabdata = Dict{String,Any}(), ρs = 0.05:0.05:0.
         #load ans
         for λ ∈ λs
             try
-                param = pde_param_1d(;name = name, Pe = λ/sqrt(Dθ) , ρa = ρ, ρp = 0., T = 1.0, Dθ = Dθ, δt = 1e-5, Nx = Nx, Nθ = Nθ, save_interval = 0.01, max_steps = 1e8)
+                param = pde_param_1d(;name = name, Pe = λ/sqrt(Dθ) , ρa = ρ-ρp, ρp = ρp, T = 1.0, Dθ = Dθ, δt = 1e-5, Nx = Nx, Nθ = Nθ, save_interval = 0.01, max_steps = 1e8)
                 t_saves, fa_saves, fp_saves = load_pdes_1d(param,0.02; save_interval = 0.001, start_time = 0.0)
 
                 stab_dsit0 = dist_from_unif_1d(param, fa_saves[1], fp_saves[1])
@@ -416,7 +449,7 @@ function refresh_stab_data_1d(;stabdata = Dict{String,Any}(), ρs = 0.05:0.05:0.
                     #break
             end
             try
-                    param = pde_param_1d(;name = name, Pe = λ/sqrt(Dθ) , ρa = ρ, ρp = 0., T = 1.0, Dθ = Dθ, δt = 1e-5, Nx = Nx, Nθ = Nθ, save_interval = 0.01, max_steps = 1e8)
+                    param = pde_param_1d(;name = name, Pe = λ/sqrt(Dθ) , ρa = ρ-ρp, ρp = ρp, T = 1.0, Dθ = Dθ, δt = 1e-5, Nx = Nx, Nθ = Nθ, save_interval = 0.01, max_steps = 1e8)
                     t_saves, fa_saves, fp_saves = load_pdes_1d(param,t_end; save_interval = 0.001, start_time = (t_end-0.02))
 
                     stab_dsit = dist_from_unif_1d(param, fa_saves[1], fp_saves[1])

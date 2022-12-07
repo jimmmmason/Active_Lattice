@@ -182,7 +182,7 @@ end
 
 function mob(fa::Array{Float64,3}, fp::Array{Float64,2}, ρ::Array{Float64,2})
     ds::Array{Float64,2} = self_diff.(ρ)
-    return fa.*ds, fp*ds, fa
+    return fa.*ds, fp.*ds, fa
 end
 
 function upwind(U::Float64, mb_down::Float64, mb_up::Float64)
@@ -278,7 +278,7 @@ function run_pde_until!(param::Dict{String,Any},density::Dict{String,Any},T; sav
         while density["t"] < T 
                 time_since_save = 0.
                 while time_since_save < min(save_interval, T)
-                    dt = pde_step!(param,density)
+                    dt = pde_stepper!(param,density)
                     time_since_save += dt 
                 end
                 if save_on
@@ -292,7 +292,7 @@ function run_pde_until!(param::Dict{String,Any},density::Dict{String,Any},T; sav
         while (density["t"] < T)&(steps < max_steps)
             time_since_save = 0.
             while (time_since_save < min(save_interval, T))&(steps < max_steps)
-                dt = pde_step!(param,density)
+                dt = pde_stepper!(param,density)
                 time_since_save += dt 
                 steps += 1
             end
@@ -339,8 +339,8 @@ function perturb_pde!(param::Dict{String,Any}, density::Dict{String,Any}; δ = 0
         Pp = (x,y) ->  ρp*cos(2*π*x/Nx) ;
     end
     if pert == "rand"
-        Pa = (x,y,θ) -> δ*ρa*(( rand() - 0.5 )/(ρa+0.01))/(2*π);
-        Pp = (x,y) -> δ*ρp*( rand() - 0.5 )/(ρp+0.01);
+        Pa = (x,y,θ) -> ρa*(( rand() - 0.5 )/(ρa+0.01))/(2*π);
+        Pp = (x,y) -> ρp*( rand() - 0.5 )/(ρp+0.01);
     end
     # 
     perta = zeros(Nx,Nx,Nθ)
@@ -352,10 +352,9 @@ function perturb_pde!(param::Dict{String,Any}, density::Dict{String,Any}; δ = 0
         pertp[x₁, x₂] += Pp(x₁, x₂);
     end
     c = dist_from_unif(param, perta.+ρa/(2*π), pertp.+ρp)
-    dist_from_unif(param, perta/c.+ρa/(2*π), pertp/c)
     fa += δ*perta/c
     fp += δ*pertp/c
-    @pack! density = fa;
+    @pack! density = fa, fp;
 end
 
 function perturb_pde_run(param)

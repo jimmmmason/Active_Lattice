@@ -46,16 +46,43 @@ display(fig)
 
 density = initialize_density(param)
 #perturb_pde!(param,density; pert = "rand",δ = δ);
-perturb_pde!(param,density; pert = "n=1",δ = δ);
+δ = 0.05
+δt = 1e-6
+@pack! param = δt
+perturb_pde!(param,density; pert = "rand",δ = δ);
 
 @unpack fa, fp, t = density
 dist_from_unif(param, fa, fp)
-pde_step!(param,density)
+pde_stepper!(param,density)
 @unpack fa, fp, t = density
 dist_from_unif(param, fa, fp)
+ρ = fp + sum(fa; dims =3)[:,:,1].*(2*π/Nθ)
+maximum(ρ)
+
+for i in 1:811 pde_stepper!(param,density) end
+
+@unpack t,fa,fp = density
+@unpack δt, Nx, Nθ, Dθ, λ = param
+fa, fp , dt = time_stepper(fa, fp, δt; Nx=Nx, Nθ=Nθ, λ=λ, Dθ=Dθ)
+
+Ua, Up, Uθ = U_velocities(fa,fp,ρ; Nx=Nx, Nθ=Nθ, λ=λ);
+moba, mobp, mobθ =  mob(fa,fp,ρ);
+
+a = maximum(abs.(Ua))
+b = maximum(abs.(Up))
+c = maximum(abs.(Uθ));
+1/(6*max(a*Nx, b*Nx, c*Nθ*Dθ/(2*π)))
+
+fp
+ds
+minimum(moba)
+minimum(mobp)
+Fa,Fp,Fθ =  F_fluxes(Ua, Up, Uθ, moba, mobp, mobθ; Nx=Nx, Nθ=Nθ);
+maximum(abs.(Fa))*2*pi
+maximum(abs.(Fp))
 
 
-
+1/(2*pi)
 name = "linear_stability"
 Pe = 1000.
     ρa = 0.7

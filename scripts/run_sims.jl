@@ -10,7 +10,7 @@ params = []
 name = "comparison"
 Dθ =100.
 Pes = [2, 2.5, 3, 3.5]
-λs = Pes*2/sqrt(Dθ)
+λs = Pes*2*sqrt(Dθ)
 for ρ in [0.7]
 for λ in λs
         local param
@@ -60,12 +60,12 @@ end
 PyPlot.close()
 fig = figure(figsize=(10,10))  
 i =1
-name = "cross_density_hist_data_4"
-t = 2.0
+name = "comparison"
+t = 1.5
 L = 128
 r = 7
-for ρ in [0.8]
-for λ in [10, 12,14,16]
+for ρ in [0.7]
+for λ in λs
     ax = fig[:add_subplot](2,2,i)
     param = extra_mixing_initial_param(; name = name, λ = λ ,ρa = ρ, ρp = 0., L=L, Δt = 0.01, γ = 0., T = 1.0,Dθ =100.)
     @unpack name, L, λ, γ, ρa, ρp, Δt, Dθ = param
@@ -80,25 +80,25 @@ for λ in [10, 12,14,16]
         ax.set_ylabel("ρ = $(ρ)")
     end
     =#
-    if ρ == 0.8
+    if ρ == 0.7
         ax.xaxis.set_ticks(0:0.5:1)
-        ax.set_xlabel("v₀ = $(λ), ρ = $(ρ)")
+        ax.set_xlabel("Pe = $(λ*sqrt(Dθ)/2), ρ = $(ρ), Dθ = $(Dθ)")
     end
 end
 end
 display(fig)
-PyPlot.savefig("pic_phase_sep_parameter_range_L=$(L).pdf",dpi = 300, format = "pdf")
+PyPlot.savefig("pic_phase_sep_parameter_range_L=$(L)_ρ =$(ρ)_Dθ=$(Dθ).pdf",dpi = 300, format = "pdf")
 # hist plot 
 PyPlot.close()
 fig = figure(figsize=(10,10))
 i = 1 
 name = "cross_density_hist_data_4"
-t_start = 2.0
-t_end = 3.0
-L = 64
-r = 4
-for ρ in [0.8]
-for λ in [10, 12,14,16]
+t_start = 1.5
+t_end = 1.7
+L = 128
+r = 5
+for ρ in [0.7]
+for λ in λs
     ax = fig[:add_subplot](2,2,i)
     param = extra_mixing_initial_param(; name = name, λ = λ ,ρa = ρ, ρp = 0., L=L, Δt = 0.01, γ = 0., T = 3.0,Dθ =100.)
     t_saves , η_saves = load_etas(param, t_end; dump_interval = 0.1, start_time = t_start);
