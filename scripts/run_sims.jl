@@ -7,19 +7,21 @@ include("/home/jm2386/Active_Lattice/src/sim_functions.jl")
 
 #varying parameters
 params = []
-name = "comparison"
+name = "presentation2"
 Dθ =100.
-Pes = [2, 2.5, 3, 3.5]
-λs = Pes*2*sqrt(Dθ)
-for ρ in [0.7]
+Pes = [20.]
+λs = Pes*sqrt(Dθ)/2
+for ρa in [0.4], ρp in [0.2]
 for λ in λs
         local param
-        param = extra_mixing_initial_param(; name = name, λ = λ ,ρa = ρ, ρp = 0., L = 128, Δt = 0.01, γ = 0., T = 3.,Dθ =Dθ)
+        param = extra_mixing_initial_param(; name = name, λ = λ ,ρa = ρa, ρp = ρp, L = 128, Δt = 0.001, γ = 0., T = 0.5, Dθ =Dθ)
         push!(params,param)
 end
 end
 #run sims
 pmap(run_sim, params; distributed = true, batch_size=1, on_error=nothing,)
+run_sim(params[1])
+interrupt()
 #plot symmetry
 clf()
 ρ = 0.95
@@ -57,7 +59,7 @@ PyPlot.savefig("translation_invariance_ρ=$(ρ).pdf",dpi = 300, format = "pdf")
     animate_etas(param,t_saves,η_saves)
 end
 #load plots 
-PyPlot.close()
+PyPlot.close("all")
 fig = figure(figsize=(10,10))  
 i =1
 name = "comparison"
@@ -69,7 +71,7 @@ for λ in λs
     ax = fig[:add_subplot](2,2,i)
     param = extra_mixing_initial_param(; name = name, λ = λ ,ρa = ρ, ρp = 0., L=L, Δt = 0.01, γ = 0., T = 1.0,Dθ =100.)
     @unpack name, L, λ, γ, ρa, ρp, Δt, Dθ = param
-    filename = "/store/DAMTP/jm2386/Active_Lattice/data/sims_raw/$(name)/size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ)_Δt=$(Δt)_Dθ=$(Dθ)/time=$(round(t; digits = 2))_size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ)_Dθ=$(Dθ)/time=$(round(t; digits = 2))_size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ)_Dθ=$(Dθ).jld2";
+    filename = "/store/DAMTP/jm2386/Active_Lattice/data/sims_raw/$(name)/size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ)_Δt=$(Δt)_Dθ=$(Dθ)/time=$(round(t; digits = 3))_size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ)_Dθ=$(Dθ)/time=$(round(t; digits = 3))_size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ)_Dθ=$(Dθ).jld2";
     η, t = wload(filename, "η", "t")
     plot_eta(fig,ax,param, t, η; title = false, r = r)
     #h = density_hist(fig,ax,param, t, η; title = false)

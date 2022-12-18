@@ -147,7 +147,7 @@ function run_model_until!(param::Dict{String,Any},model::Dict{String,Any},T; sav
     if save_on
         @unpack name, L, λ, γ, ρa, ρp, Δt, Dθ = param
         @unpack η, t = model
-        filename = "/store/DAMTP/jm2386/Active_Lattice/data/sims_raw/$(name)/size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ)_Δt=$(Δt)_Dθ=$(Dθ)/time=$(round(t; digits = 2))_size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ)_Dθ=$(Dθ)/time=$(round(t; digits = 2))_size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ)_Dθ=$(Dθ).jld2";
+        filename = "/store/DAMTP/jm2386/Active_Lattice/data/sims_raw/$(name)/size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ)_Δt=$(Δt)_Dθ=$(Dθ)/time=$(round(t; digits = 3))_size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ)_Dθ=$(Dθ)/time=$(round(t; digits = 3))_size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ)_Dθ=$(Dθ).jld2";
         data = Dict{String,Any}();
         @pack! data = η, t
         safesave(filename,data)
@@ -157,7 +157,7 @@ function run_model_until!(param::Dict{String,Any},model::Dict{String,Any},T; sav
         if save_on
             @unpack name, L, λ, γ, ρa, ρp, Δt, Dθ = param
             @unpack η, t = model
-            filename = "/store/DAMTP/jm2386/Active_Lattice/data/sims_raw/$(name)/size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ)_Δt=$(Δt)_Dθ=$(Dθ)/time=$(round(t; digits = 2))_size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ)_Dθ=$(Dθ)/time=$(round(t; digits = 2))_size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ)_Dθ=$(Dθ).jld2";
+            filename = "/store/DAMTP/jm2386/Active_Lattice/data/sims_raw/$(name)/size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ)_Δt=$(Δt)_Dθ=$(Dθ)/time=$(round(t; digits = 3))_size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ)_Dθ=$(Dθ)/time=$(round(t; digits = 3))_size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ)_Dθ=$(Dθ).jld2";
             data = Dict{String,Any}();
             @pack! data = η, t
             safesave(filename,data)
@@ -173,7 +173,7 @@ function run_and_dump_sim(param::Dict{String,Any},model::Dict{String,Any},T; dum
         if save_on
             @unpack name, L, λ, γ, ρa, ρp, Δt, Dθ = param
             @unpack η, t = model
-            filename = "/store/DAMTP/jm2386/Active_Lattice/data/sims_raw/$(name)/size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ)_Δt=$(Δt)_Dθ=$(Dθ)/time=$(round(t; digits = 2))_size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ)_Dθ=$(Dθ)/time=$(round(t; digits = 2))_size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ)_Dθ=$(Dθ).jld2";
+            filename = "/store/DAMTP/jm2386/Active_Lattice/data/sims_raw/$(name)/size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ)_Δt=$(Δt)_Dθ=$(Dθ)/time=$(round(t; digits = 3))_size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ)_Dθ=$(Dθ)/time=$(round(t; digits = 3))_size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ)_Dθ=$(Dθ).jld2";
             data = Dict{String,Any}();
             @pack! data = η, t
             safesave(filename,data)
@@ -190,7 +190,7 @@ function run_sim(param)
         try
             t = s
             @unpack name, L, λ, γ, ρa, ρp, Δt, Dθ = param
-            filename = "/store/DAMTP/jm2386/Active_Lattice/data/sims_raw/$(name)/size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ)_Δt=$(Δt)_Dθ=$(Dθ)/time=$(round(t; digits = 2))_size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ)_Dθ=$(Dθ)/time=$(round(t; digits = 2))_size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ)_Dθ=$(Dθ).jld2";
+            filename = "/store/DAMTP/jm2386/Active_Lattice/data/sims_raw/$(name)/size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ)_Δt=$(Δt)_Dθ=$(Dθ)/time=$(round(t; digits = 3))_size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ)_Dθ=$(Dθ)/time=$(round(t; digits = 3))_size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ)_Dθ=$(Dθ).jld2";
             η, t = wload(filename, "η", "t")
             c = zeros(L,L,4)
             E = [[1,0],[0,1],[0,-1],[-1,0],]
@@ -232,7 +232,7 @@ function load_etas(param::Dict{String,Any},T; dump_interval = 0.01, start_time= 
         try 
             t = s
             @unpack name, L, λ, γ, ρa, ρp, Δt, Dθ = param
-            filename = "/store/DAMTP/jm2386/Active_Lattice/data/sims_raw/$(name)/size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ)_Δt=$(Δt)_Dθ=$(Dθ)/time=$(round(t; digits = 2))_size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ)_Dθ=$(Dθ)/time=$(round(t; digits = 2))_size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ)_Dθ=$(Dθ).jld2";
+            filename = "/store/DAMTP/jm2386/Active_Lattice/data/sims_raw/$(name)/size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ)_Δt=$(Δt)_Dθ=$(Dθ)/time=$(round(t; digits = 3))_size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ)_Dθ=$(Dθ)/time=$(round(t; digits = 3))_size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ)_Dθ=$(Dθ).jld2";
             η, t = wload(filename, "η", "t")
             push!(t_saves,t)
             push!(η_saves,η)
@@ -251,7 +251,8 @@ function animate_etas(param,t_saves,η_saves)
     frames = length(η_saves)-1
     fig, ax = PyPlot.subplots(figsize =(10, 10))
     makeframe(i) = plot_eta(fig,ax,param, t_saves[i+1], η_saves[i+1])
-    myanim = anim.FuncAnimation(fig, makeframe, frames=frames, interval=20)
+    interval = Int64(round(10000/frames))
+    myanim = anim.FuncAnimation(fig, makeframe, frames=frames, interval=interval)
     # Convert it to an MP4 movie file and saved on disk in this format.
     @unpack name, L, λ, γ, ρa, ρp = param
     pathname = "/store/DAMTP/jm2386/Active_Lattice/plots/vids/$(name)/start_time=$(round(t_saves[1]; digits=5))_end_time=$(round(t_saves[frames+1]; digits=5))_interval=$(interval)_size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ)"
@@ -264,8 +265,8 @@ function plot_eta(fig::Figure, ax::PyObject, param::Dict{String,Any}, t::Float64
     @unpack name, L, λ, γ, ρa, ρp, E, Δt, site_distribution, angles, rates = param
     ax.clear()
     #collect data
-    y = [Int64(L/2),Int64(L/2)]-indexmin(local_polarisation(η, L; r = 3))
-    η = translate_η(η, L, y)
+    #y = [Int64(L/2),Int64(L/2)]-indexmin(local_polarisation(η, L; r = 3))
+    #η = translate_η(η, L, y)
     passive, active, directions, polarisations = extract_points_v2(η,L)
     dx = cos.(directions)
     dy = sin.(directions)

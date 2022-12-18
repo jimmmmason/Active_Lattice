@@ -5,13 +5,13 @@ println("Loading ...")
 #runnning simulation
 using StatsBase, DataStructures, UnPack, LinearAlgebra, Random, TensorOperations, StaticArrays
 
-function pde_param(; name = "test", D =1. , Pe =1. ,ρa = 0.5, ρp = 0.0, Nx = 100, Nθ = 100, δt = 1e-5, Dθ = 10, T= 0.001, save_interval = 0.01, max_steps = 1e8, max_runs = 6, λ_step = 10., λmax = 100., λs = 20.:20.:100., pert = "n=1", δ = 0.01)
+function pde_param_k(; name = "test", D =1. , Pe =1. ,ρa = 0.5, ρp = 0.0, Nx = 100, Nθ = 100, δt = 1e-5, Dθ = 10, T= 0.001, save_interval = 0.01, max_steps = 1e8, max_runs = 6, λ_step = 10., λmax = 100., λs = 20.:20.:100., pert = "n=1", δ = 0.01,Dx = 1.,k=20)
     Ω  = [[i,j] for i in 1:Nx for j in 1:Nx ] 
     S  = [ θ for θ in 1:Nθ]
     E = [[1,0],[0,1],[0,-1],[-1,0],]
     λ = Pe*sqrt(Dθ)
     param = Dict{String,Any}()
-    @pack! param = name, D, λ, ρa, ρp, δt, Nx, Nθ, S,  E, Dθ, T, save_interval, max_steps, max_runs, λ_step, λmax, λs, pert, δ
+    @pack! param = k, name, D, λ, ρa, ρp, δt, Nx, Nθ, S,  E, Dθ, T, save_interval, max_steps, max_runs, λ_step, λmax, λs, pert, δ, Pe, Dx
     return param
 end
 
@@ -136,13 +136,23 @@ end
 
 ##
 
-function self_diff(ρ::Float64)
+function self_diff(ρ::Float64;logtol = 1e-10)
     α::Float64= π/2 -1;
+    if ρ ≤  0.
+        ρ = logtol
+    elseif ρ>1.
+        ρ = 1.
+    end
     return ( 1-ρ).*( α*(2*α-1)/(2*α+1)*ρ^2 - α*ρ +1)
 end
 
-function self_diff_prime(ρ::Float64)
+function self_diff_prime(ρ::Float64;logtol = 1e-10)
     α::Float64= π/2 -1;
+    if ρ ≤  0.
+        ρ = logtol
+    elseif ρ>1.
+        ρ = 1.
+    end
     return - ( α*(2*α-1)/(2*α+1)*ρ.^2 - α*ρ .+1) + ( -ρ .+1)*(2*α*(2*α-1)/(2*α+1)*ρ - α );
 end
 
@@ -156,7 +166,7 @@ function mag(f::Array{Float64,3}; Nθ = 50, Nx =100)
 end
 
 function coeff_s(rho::Float64,ds::Float64)
-    return (rho>0 ? (1-rho-ds)/(rho*ds) : 0)
+    return ((rho*ds)>0 ? (1-rho-ds)/(rho*ds) : 0)
 end
 
 function coeff_mag_s(f::Array{Float64,3},ρ::Array{Float64,2}; Nθ::Int64 = 100,  Nx::Int64 = 100)
@@ -167,17 +177,17 @@ function coeff_mag_s(f::Array{Float64,3},ρ::Array{Float64,2}; Nθ::Int64 = 100,
     return mag_s
 end
 #functon p is labelled W in the pdf
-function p(x::Float64)
+function p(x::Float64; logtol = 1e-10)
     if x <0.
-        x = 0.
-    elseif x>1.
-        x = 1.
+        x = logtol
+    elseif x ≥ 1.
+        x = 1. -logtol
     end
     c2::Float64 = sqrt( (π-2)/( (π-1)*(26+(-11+π)*π))  )
     c3::Float64 = -(-4+π)sqrt( 1+8*(π-3)/( 26+(-11+π)*π)  )/2
     p1::Float64 = (1-π+2*(-3+π)*x)
     p2::Float64 = -2  +2*π  -(-2+π)*(-1+π)*x  +(-3+π)*(-2+π)*x^2
-    return c3*log(-1-c2*p1)  -c3*log(1-c2*p1)  +(1 -π)*log(1-x)   + 0.5*(-2+π)*log(p2)
+    return c3*log(abs(-1-c2*p1))  -c3*log(abs(1-c2*p1))  +(1 -π)*log(1-x)   + 0.5*(-2+π)*log(abs(p2))
 end
 
 function mob(fa::Array{Float64,3}, fp::Array{Float64,2}, ρ::Array{Float64,2})
@@ -282,9 +292,16 @@ function run_pde_until!(param::Dict{String,Any},density::Dict{String,Any},T; sav
                     time_since_save += dt 
                 end
                 if save_on
-                    @unpack t = density
-                    filename = "/store/DAMTP/jm2386/Active_Lattice/data/pde_raw/$(name)/Nx=$(Nx)_Nθ=$(Nθ)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_dt=$(δt)_Dθ=$(Dθ)/time=$(round(t; digits = 2))_Nx=$(Nx)_Nθ=$(Nθ)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_dt=$(δt)_Dθ=$(Dθ).jld2";
-                    safesave(filename,density)
+                    if save_interval < 1e-4
+                        filename = "/store/DAMTP/jm2386/Active_Lattice/data/pde_raw/$(name)/Nx=$(Nx)_Nθ=$(Nθ)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_dt=$(δt)_Dθ=$(Dθ)/time=$(round(t; digits = 5))_Nx=$(Nx)_Nθ=$(Nθ)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_dt=$(δt)_Dθ=$(Dθ).jld2";
+                        safesave(filename,density)
+                    elseif save_interval < 0.01
+                        filename = "/store/DAMTP/jm2386/Active_Lattice/data/pde_raw/$(name)/Nx=$(Nx)_Nθ=$(Nθ)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_dt=$(δt)_Dθ=$(Dθ)/time=$(round(t; digits = 4))_Nx=$(Nx)_Nθ=$(Nθ)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_dt=$(δt)_Dθ=$(Dθ).jld2";
+                        safesave(filename,density)
+                    else
+                        filename = "/store/DAMTP/jm2386/Active_Lattice/data/pde_raw/$(name)/Nx=$(Nx)_Nθ=$(Nθ)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_dt=$(δt)_Dθ=$(Dθ)/time=$(round(t; digits = 2))_Nx=$(Nx)_Nθ=$(Nθ)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_dt=$(δt)_Dθ=$(Dθ).jld2";
+                        safesave(filename,density)
+                    end
                 end
             end
     else
@@ -298,7 +315,10 @@ function run_pde_until!(param::Dict{String,Any},density::Dict{String,Any},T; sav
             end
             if save_on
                 @unpack t = density
-                if save_interval < 0.01
+                if save_interval < 1e-4
+                    filename = "/store/DAMTP/jm2386/Active_Lattice/data/pde_raw/$(name)/Nx=$(Nx)_Nθ=$(Nθ)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_dt=$(δt)_Dθ=$(Dθ)/time=$(round(t; digits = 5))_Nx=$(Nx)_Nθ=$(Nθ)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_dt=$(δt)_Dθ=$(Dθ).jld2";
+                    safesave(filename,density)
+                elseif save_interval < 0.01
                     filename = "/store/DAMTP/jm2386/Active_Lattice/data/pde_raw/$(name)/Nx=$(Nx)_Nθ=$(Nθ)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_dt=$(δt)_Dθ=$(Dθ)/time=$(round(t; digits = 4))_Nx=$(Nx)_Nθ=$(Nθ)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_dt=$(δt)_Dθ=$(Dθ).jld2";
                     safesave(filename,density)
                 else
@@ -312,7 +332,7 @@ function run_pde_until!(param::Dict{String,Any},density::Dict{String,Any},T; sav
 end
 
 function perturb_pde!(param::Dict{String,Any}, density::Dict{String,Any}; δ = 0.01, pert = "n=2")
-    @unpack Nx, S, ρa, ρp, λ, Dθ, Nx, Nθ = param
+    @unpack Nx, S, ρa, ρp, λ, Dθ, Nx, Nθ, Dx, Pe, k  = param
     @unpack fa, fp = density
     ρ = ρa + ρp
     if ρ >0.9
@@ -332,11 +352,12 @@ function perturb_pde!(param::Dict{String,Any}, density::Dict{String,Any}; δ = 0
         Pp = (x,y) -> δ*( ρp*cos(2*π*x/Nx)*cos(2*π*y/Nx) );
     end
     if pert == "n=1"
-        γ = -4*π^2
-        Λ = 1/2*(-Dθ + γ*β + sqrt(Dθ^2 + 2*Dθ*β*γ + (β*γ)^2 - 2*a^2*γ*ρa*ρ ) )
-        C = 2*π*ρa*(ρa + ρp)/ (Dθ + Λ)
-        Pa = (x,y,θ) ->  ρa*cos(2*π*x/Nx) - C*(sin(2*π*x/Nx)*cos(2π*θ/Nθ));
-        Pp = (x,y) ->  ρp*cos(2*π*x/Nx) ;
+        K = collect(0:1:(k-1))
+        c,ω = ap_mstabparams_lite(ρa,ρp,Dx,Pe,Dθ)
+        matrix = ap_MathieuMatrix(c, ω; k=k)
+        a, A = ap_MathieuEigen(matrix)
+        Pa = (x,y,θ) -> real.( dot(A[2:1:(k+1),k+1],cos.(θ*K*(2*π/Nθ)))*exp(im*x*ω/Nx) )
+        Pp = (x,y) -> real.(A[1,1]*exp(im*x*ω/Nx));
     end
     if pert == "rand"
         Pa = (x,y,θ) -> ρa*(( rand() - 0.5 )/(ρa+0.01))/(2*π);
@@ -384,14 +405,16 @@ end
 # loading
 
 function load_pdes(param::Dict{String,Any},T; save_interval = 1., start_time = 0.)
-    @unpack name, Nx, Nθ, λ, ρa, ρp, δt = param
+    @unpack name, Nx, Nθ, λ, ρa, ρp, δt, Dθ = param
     t = start_time
     fa_saves = []
     fp_saves = []
     t_saves = []
     while t ≤ T
         try
-            if save_interval < 0.01
+            if save_interval < 1e-4
+                filename = "/store/DAMTP/jm2386/Active_Lattice/data/pde_raw/$(name)/Nx=$(Nx)_Nθ=$(Nθ)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_dt=$(δt)_Dθ=$(Dθ)/time=$(round(t; digits = 5))_Nx=$(Nx)_Nθ=$(Nθ)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_dt=$(δt)_Dθ=$(Dθ).jld2";
+            elseif save_interval < 0.01
                 filename = "/store/DAMTP/jm2386/Active_Lattice/data/pde_raw/$(name)/Nx=$(Nx)_Nθ=$(Nθ)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_dt=$(δt)_Dθ=$(Dθ)/time=$(round(t; digits = 4))_Nx=$(Nx)_Nθ=$(Nθ)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_dt=$(δt)_Dθ=$(Dθ).jld2";
             else
                 filename = "/store/DAMTP/jm2386/Active_Lattice/data/pde_raw/$(name)/Nx=$(Nx)_Nθ=$(Nθ)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_dt=$(δt)_Dθ=$(Dθ)/time=$(round(t; digits = 2))_Nx=$(Nx)_Nθ=$(Nθ)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_dt=$(δt)_Dθ=$(Dθ).jld2";

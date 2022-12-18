@@ -282,7 +282,7 @@ function run_pde_until_1d!(param::Dict{String,Any},density::Dict{String,Any},T; 
 end
 
 function perturb_pde_1d!(param::Dict{String,Any}, density::Dict{String,Any}; δ = 0.01, pert = "n=2")
-    @unpack Nx, S, ρa, ρp, λ, Dθ, Nx, Nθ,Dx,Pe,Dθ = param
+    @unpack Nx, S, ρa, ρp, λ, Dθ, Nx, Nθ,Dx,Pe,Dθ,k = param
     @unpack fa, fp = density
     ρ = ρa + ρp
     if ρ >0.9
@@ -301,7 +301,6 @@ function perturb_pde_1d!(param::Dict{String,Any}, density::Dict{String,Any}; δ 
             Pa = (x,θ) -> real.( dot(A[:,1],cos.(θ*K*(2*π/Nθ)))*exp(im*x*ω/Nx) )
             Pp = (x) -> B*cos(x*ω/Nx);
         else
-            k = 15
             K = collect(0:1:(k-1))
             c,ω = ap_mstabparams_lite(ρa,ρp,Dx,Pe,Dθ)
             matrix = ap_MathieuMatrix(c, ω; k=k)

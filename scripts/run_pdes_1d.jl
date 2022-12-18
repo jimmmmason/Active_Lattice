@@ -9,7 +9,7 @@ params = []
 name = "stability_1d_actpass_2"
 pert = "n=1"
 T  = 1.0
-for ρ in collect(0.4:0.05:0.95), ρp in collect(0.1:0.1:0.5), Pe in collect(5.:5.:50.), Dθ in [100.]
+for ρ in collect(0.4:0.05:0.6), ρp in collect(0.2:0.2:0.4), Pe in collect(50.:5.:100.), Dθ in [100.]
         local param
         ρa = ρ - ρp
         if ρa>0.
@@ -39,9 +39,60 @@ for ρ in collect(0.4:0.05:0.95), ρp in collect(0.0:0.1:0.5), Pe in collect(5.:
                 push!(params,param)
         end
 end
+params = []
+name = "stability_1d_actpass_3"
+pert = "rand"
+T  = 2.0
+for ρa in [0.225], ρp in [0.5], Pe in [377.1], Dθ in [100.]
+        local param
+                #
+                param = pde_param(; name = name, 
+                        ρa = ρa, Pe = Pe, ρp = ρp, T = T, 
+                        Dθ = Dθ, δt = 1e-6, Nx = 50, Nθ = 20, 
+                        save_interval = 1e-4, max_steps = 1e10,
+                        pert = pert, δ = 0.001
+                )
+                #
+                push!(params,param)
+end
 #run pdes
 @everywhere include("/home/jm2386/Active_Lattice/src/pde_functions_1d.jl")
 @everywhere include("/home/jm2386/Active_Lattice/src/lin_stab_solver.jl")
 length(params)/nworkers()
 pmap(perturb_pde_run_1d, params; distributed = true, batch_size=1, on_error=nothing,)
 #
+
+
+params = []
+pert = "n=1"
+T  = 0.01
+f(x) = ap_lin_stab_line(x,0.5; Dx =1. ,Pe = 350., Dθ =100.,k=50 )
+root = find_zero(f, (0.22,  0.23))
+for ρa in [root], ρp in [0.5], Pe in [350.], Dθ in [100.], δ in [1e-5],k in [40], i in [1,2,4]
+        Nx = 64*i
+        Nθ = 16*i
+        name = "stability_1d_actpass_Nx=$(Nx)"
+        local param
+                #
+                param = pde_param_k(; name = name, 
+                        ρa = ρa, Pe = Pe, ρp = ρp, T = T, 
+                        Dθ = Dθ, δt = 1e-5, Nx = Nx, Nθ = Nθ, 
+                        save_interval = 1e-5, max_steps = 1e8,
+                        pert = pert, δ = δ, k=k
+                )
+                #
+                push!(params,param)
+end
+#run pdes
+@everywhere include("/home/jm2386/Active_Lattice/src/pde_functions_1d.jl")
+@everywhere include("/home/jm2386/Active_Lattice/src/lin_stab_solver.jl")
+###
+length(params)/nworkers()
+pmap(perturb_pde_run_1d, params; distributed = true, batch_size=1, on_error=nothing,)
+#
+###
+@everywhere include("/home/jm2386/Active_Lattice/src/pde_functions_1d.jl")
+@everywhere include("/home/jm2386/Active_Lattice/src/plot_functions.jl")
+pmap(make_video_1d, params; distributed = true, batch_size=1, on_error=nothing,)
+#
+make_video_1d(param)

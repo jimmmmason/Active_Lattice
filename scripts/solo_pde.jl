@@ -40,16 +40,26 @@ t_saves, fa_saves, fp_saves = load_pdes(param,T; save_interval = 0.0001)
     ax.set_title("Dθ = $(Dθ) ρ = $(ρa) Pe = $(Pe)")
 display(fig)
 
+fig, ax = PyPlot.subplots(figsize =(10, 10))
+i = 0
 
 
+i+= 1
+t, fa, fp = t_saves[i], fa_saves[i], fp_saves[i]
 
+plot_pde_lite!(fig,param, t, fa, fp )
+display(fig)
+
+
+ρ = fp + sum(fa; dims =3)[:,:,1].*(2*π/Nθ)
+maximum(ρ)
 
 density = initialize_density(param)
 #perturb_pde!(param,density; pert = "rand",δ = δ);
-δ = 0.05
-δt = 1e-6
-@pack! param = δt
-perturb_pde!(param,density; pert = "rand",δ = δ);
+δ = 1e-6
+δt = 1e-5
+@pack! param = δt, δ
+perturb_pde!(param,density; pert = "n=1",δ = δ);
 
 @unpack fa, fp, t = density
 dist_from_unif(param, fa, fp)
@@ -58,9 +68,41 @@ pde_stepper!(param,density)
 dist_from_unif(param, fa, fp)
 ρ = fp + sum(fa; dims =3)[:,:,1].*(2*π/Nθ)
 maximum(ρ)
+minimum(ρ)
 
-for i in 1:811 pde_stepper!(param,density) end
+t
 
+for i in 1:100 pde_stepper!(param,density) end
+
+pde_stepper!(param,density)
+@unpack fa, fp, t = density
+plot_pde_lite!(fig,param, t, fa, fp )
+display(fig)
+
+i = 1
+ϕ = 0.
+while (i<700)&(ϕ < 1.)
+    @unpack δt, Nx, Nθ, Dθ, λ = param
+    @unpack fa, fp, t = density
+    fa, fp , dt = time_stepper(fa, fp, δt; Nx=Nx, Nθ=Nθ, λ=λ, Dθ=Dθ)
+    t += dt
+    @pack! density = fa, fp, t
+    ρ = fp + sum(fa; dims =3)[:,:,1].*(2*π/Nθ)
+    ϕ = maximum(ρ)
+    if 1 % 10 == 0
+        println(ϕ)
+    end
+    i+=1
+end
+
+for i in 1:1000 pde_stepper!(param,density) end
+
+maximum(p.(ρ))
+logmfa = map(x -> (x>0 ? log(x) : logtol), fa);
+logmfp = map(x -> (x>0 ? log(x) : logtol), fp);
+maximum(abs.(logmfp))
+maximum(abs.(logmfa))
+coeff_mag_s(fa,ρ; Nθ=Nθ, Nx=Nx )
 @unpack t,fa,fp = density
 @unpack δt, Nx, Nθ, Dθ, λ = param
 fa, fp , dt = time_stepper(fa, fp, δt; Nx=Nx, Nθ=Nθ, λ=λ, Dθ=Dθ)
@@ -74,12 +116,20 @@ c = maximum(abs.(Uθ));
 1/(6*max(a*Nx, b*Nx, c*Nθ*Dθ/(2*π)))
 
 fp
+fa
 ds
 minimum(moba)
+maximum(moba)
 minimum(mobp)
+maximum(mobp)
 Fa,Fp,Fθ =  F_fluxes(Ua, Up, Uθ, moba, mobp, mobθ; Nx=Nx, Nθ=Nθ);
 maximum(abs.(Fa))*2*pi
 maximum(abs.(Fp))
+
+maximum(abs.(site_div_θ(Fa; Nx=Nx, Nθ=Nθ)))
+maximum(abs.(site_div(Fp; Nx=Nx)))
+maximum(Dθ*site_θ_diff(Fθ; Nx=Nx, Nθ=Nθ))
+
 
 
 1/(2*pi)

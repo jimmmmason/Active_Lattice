@@ -3,6 +3,7 @@ using DrWatson
 @quickactivate "Active_Lattice"
 include("/home/jm2386/Active_Lattice/src/pde_functions.jl")
 include("/home/jm2386/Active_Lattice/src/plot_functions.jl")
+include("/home/jm2386/Active_Lattice/src/lin_stab_solver.jl")
 ###
 #=
 
@@ -28,17 +29,24 @@ Plot visual at T
 
 =#
 ###
-t = 0.018
+t = 0.01
     @unpack ρa,ρp,Dθ,Pe,δt,λ,Nx,Nθ =param
     filename = "/store/DAMTP/jm2386/Active_Lattice/data/pde_raw/$(name)/Nx=$(Nx)_Nθ=$(Nθ)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_dt=$(δt)_Dθ=$(Dθ)/time=$(round(t; digits = 3))_Nx=$(Nx)_Nθ=$(Nθ)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_dt=$(δt)_Dθ=$(Dθ).jld2"
     data = wload(filename)
     fa = data["fa"]
     fp = data["fp"]
+    density = Dict{String,Any}()
     @pack! density = fa, fp, t
     @pack! param = ρa,ρp,Dθ,Pe,δt,λ,Nx,Nθ
 fig, axs = plt.subplots(1, 2, figsize=(12,5))
-plot_pde(fig,axs,param,density)
+
+
+clf()
+plot_pde_lite(fig,axs,param,t,fa,fp)
 display(fig)
+clf()
+PyPlot.close("all")
+plt.get_fignums() 
 #t += 0.1
 #for i in 1:100 pde_step!(param,density) end
 ###
@@ -66,7 +74,12 @@ Create video of pde
 =#
 ###
 param = pde_param(;name = name, Pe = Pe , ρa = ρa, ρp = 0., T = 1.0, Dθ = Dθ, δt = 1e-5, Nx = 50, Nθ = 20, save_interval = 0.01, max_steps = 1e8)
-param = params[2]
-    t_saves, fa_saves, fp_saves = load_pdes(param,1.0; save_interval = 0.0001)
+param = params[1]
+    t_saves, fa_saves, fp_saves = load_pdes(param,0.003; save_interval = 1e-5)
+
     animate_pdes(param,t_saves,fa_saves,fp_saves)
 ###
+@everywhere include("/home/jm2386/Active_Lattice/src/pde_functions.jl")
+@everywhere include("/home/jm2386/Active_Lattice/src/plot_functions.jl")
+pmap(make_video, params; distributed = true, batch_size=1, on_error=nothing,)
+#

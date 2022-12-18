@@ -5,10 +5,10 @@ include("/home/jm2386/Active_Lattice/src/pde_functions_1d.jl")
 include("/home/jm2386/Active_Lattice/src/plot_functions.jl")
 ###
 name = "stability_1d_actpass_2"
-Pe = 30.
+Pe = 20.
 ρa = 0.55
 Dθ = 1.
-ρp = 0.2
+ρp = 0.3
     δ = 1e-2
     δt = 1e-5
     T  = 1.0
@@ -28,7 +28,7 @@ t_saves, fa_saves, fp_saves = load_pdes_1d(param,T; save_interval = 0.0001)
     ax.set_title("Dθ = $(Dθ) ρ = $(ρa) Pe = $(Pe)")
 display(fig)
 
-lin_stab_line(0.4;Dx = Dx, Pe =Pe, Dθ = 1)
+ap_lin_stab_line(ρa, ρp;Dx = Dx, Pe =Pe, Dθ = Dθ)
 
 #non-linear instability? 
 name = "stability_1d_5"
@@ -58,11 +58,11 @@ param = pde_param(;
     name = name, ρa = ρa, ρp = 0., Pe = Pe, T = T, Dθ = Dθ, δt = δt, Nx = Nx, Nθ = Nθ, save_interval = 0.0001, δ= δ
 )
 
-name = "stability_1d_actpass"
-Pe = 10.
-ρa = 0.45
-ρp = 0.1
-Dθ = 100.
+name = "stability_1d_actpass_2"
+Pe = 20.
+ρa = 0.55
+Dθ = 1.
+ρp = 0.3
     δ = 1e-2
     δt = 1e-5
     T  = 1.0
@@ -70,14 +70,9 @@ Dθ = 100.
     Nx = 50
     Nθ = 20
 
-param = pde_param_1d(; 
-    name = name, ρa = ρa, ρp = ρp, Pe = Pe, T = T, Dθ = Dθ, δt = δt, Nx = Nx, Nθ = Nθ, save_interval = save_interval, δ= δ
-)
-
-
 density = initialize_density_1d(param)
 @unpack T, save_interval, max_steps, pert, δ = param
-perturb_pde_1d!(param,density; pert = pert, δ = δ)
+perturb_pde_1d!(param,density; pert = pert, δ = 1e-4)
 @unpack fa, fp, t = density
 fig, ax = PyPlot.subplots(figsize =(10, 10))
 ax.plot(fa)
@@ -89,6 +84,7 @@ perturb_pde!(param,density; pert = "n=1",δ = δ);
 
 @time for i in 1:100 pde_stepper_1d!(param,density) end 
 
+pde_stepper_1d!(param,density)
 @unpack fa = density
 maximum(fa)
 

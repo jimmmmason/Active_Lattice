@@ -140,13 +140,19 @@ function ap_MathieuEigen_lite(matrix; k=20)
     return  eigvals(matrix)[k+1]
 end
 
-function ap_lin_stab_line(ρa,ρp; Dx =1. ,Pe = 1., Dθ = 100. )
+function ap_lin_stab_line(ρa,ρp; Dx =1. ,Pe = 1., Dθ = 100., k = 20 )
     c,ω = ap_mstabparams_lite(ρa,ρp,Dx,Pe,Dθ)
-    matrix = ap_MathieuMatrix(c,ω; k = 20);
-    amin = ap_MathieuEigen_lite(matrix; k = 20)  
+    matrix = ap_MathieuMatrix(c,ω; k = k);
+    amin = ap_MathieuEigen_lite(matrix; k = k)  
     return real(amin)
 end
 
+function ap_lin_stab_imaginary(ρa,ρp; Dx =1. ,Pe = 1., Dθ = 100., k = 20 )
+    c,ω = ap_mstabparams_lite(ρa,ρp,Dx,Pe,Dθ)
+    matrix = ap_MathieuMatrix(c,ω; k = k);
+    amin = ap_MathieuEigen_lite(matrix; k = k)  
+    return imag(amin)
+end
 
 #=
 ρ = 0.7
