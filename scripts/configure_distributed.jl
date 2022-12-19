@@ -21,8 +21,8 @@ exit
 ssh refract
 exit
 =#
-addprocs([("cherry",:auto)])
-addprocs([("cyllene",:auto)])
+#addprocs([("cherry",:auto)])
+#addprocs([("cyllene",:auto)])
 #addprocs([("indium",:auto)])
 #addprocs([("orthosie",:auto)])
 addprocs([("refract",:auto)])

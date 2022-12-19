@@ -27,7 +27,7 @@ Pes = collect(5.:5.:100.)
 name = "stability_1d_actpass_2"
 T  = 1.0
 Dθ = 100.
-ρp = 0.0
+ρp = 0.2
 ρs  = collect(0.4:0.05:1.0)
 Pes = collect(0.:5.0:100.)
     Nx = 50
@@ -37,10 +37,10 @@ Pes = collect(0.:5.0:100.)
 ###
 name = "stability_2d_actpass_2"
 T  = 2.0
-Dθ = 10000.
-ρp = 0.5
-ρs  = collect(0.7:0.01:0.73)
-Pes = collect(0.:100.0:1000.)
+Dθ = 100.
+ρp = 0.4
+ρs  = collect(ρp:0.1:1.0)
+Pes = collect(0.:10.0:400.)
     Nx = 50
     Nθ = 20
     λs = Pes*sqrt(Dθ)
@@ -88,7 +88,7 @@ if ρp>0.4
 end
 stabdata["ρ = $(1.)"]["stable"] = stable
 
-stabdata = Dict{String,Any}()
+#stabdata = Dict{String,Any}()
 
 ###
 #=
@@ -99,12 +99,17 @@ Plot stability
 ###
 fig, ax = PyPlot.subplots(figsize =(10, 10))
 xs = append!(collect(0.01:0.01:0.9),collect(0.901:0.001:0.999))
-
-Dθ = (40.)^2
-fig, ax = PyPlot.subplots(figsize =(10, 10))
-xs = collect(0.7:0.0001:0.73)
 ys = collect(0:1:maximum(Pes))
 plot_stab(fig, ax, stabdata; ρs = ρs ,xs = xs, ys =ys, xtic = (minimum(ρs)-ρp):0.01:(maximum(ρs)-ρp), ytic = 0:100:maximum(Pes), axlim = [minimum(ρs)-ρp, maximum(ρs)-ρp, minimum(Pes), maximum(Pes)], Dθ = Dθ,ρp=ρp)
+display(fig)
+
+
+
+#Dθ = (40.)^2
+fig, ax = PyPlot.subplots(figsize =(10, 10))
+xs = append!(collect(0.01:0.01:0.9),collect(0.901:0.001:0.999))
+ys = collect(0:1:maximum(Pes))
+plot_stab(fig, ax, stabdata; ρs = ρs ,xs = xs, ys =ys, xtic = (minimum(ρs)-ρp):0.1:(maximum(ρs)-ρp), ytic = 0:100:maximum(Pes), axlim = [minimum(ρs)-ρp, maximum(ρs)-ρp, minimum(Pes), maximum(Pes)], Dθ = Dθ,ρp=ρp)
 x = xs
     y = ys
     n = length(x)
@@ -155,4 +160,6 @@ x = xs
 
 
 ap_lin_stab_imaginary(0.22,0.5; Dx =1. ,Pe = 500., Dθ = 10000.,k=50 )
+
+using Roots
 

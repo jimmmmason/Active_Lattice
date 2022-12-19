@@ -2,7 +2,7 @@ cd("/home/jm2386/Active_Lattice/")
 using DrWatson
 @quickactivate "Active_Lattice"
 include("/home/jm2386/Active_Lattice/src/pde_functions_1d.jl")
-#include("/home/jm2386/Active_Lattice/src/plot_functions.jl")
+include("/home/jm2386/Active_Lattice/src/plot_functions.jl")
 
 #varying parameters
 params = []
@@ -65,13 +65,14 @@ pmap(perturb_pde_run_1d, params; distributed = true, batch_size=1, on_error=noth
 
 params = []
 pert = "n=1"
-T  = 0.01
+T  = 0.010
+using Roots
 f(x) = ap_lin_stab_line(x,0.5; Dx =1. ,Pe = 350., Dθ =100.,k=50 )
 root = find_zero(f, (0.22,  0.23))
-for ρa in [root], ρp in [0.5], Pe in [350.], Dθ in [100.], δ in [1e-5],k in [40], i in [1,2,4]
-        Nx = 64*i
-        Nθ = 16*i
-        name = "stability_1d_actpass_Nx=$(Nx)"
+for ρa in [root], ρp in [0.5], Pe in [350.], Dθ in [100.], δ in [1e-6],k in [40], i in [2]
+        Nx = 256*i
+        Nθ = 256*i
+        name = "stability_1d_actpass_2_Nx=$(Nx)_δ=$(δ)"
         local param
                 #
                 param = pde_param_k(; name = name, 
@@ -87,12 +88,13 @@ end
 @everywhere include("/home/jm2386/Active_Lattice/src/pde_functions_1d.jl")
 @everywhere include("/home/jm2386/Active_Lattice/src/lin_stab_solver.jl")
 ###
-length(params)/nworkers()
+#length(params)/nworkers()
 pmap(perturb_pde_run_1d, params; distributed = true, batch_size=1, on_error=nothing,)
 #
 ###
 @everywhere include("/home/jm2386/Active_Lattice/src/pde_functions_1d.jl")
 @everywhere include("/home/jm2386/Active_Lattice/src/plot_functions.jl")
+###
 pmap(make_video_1d, params; distributed = true, batch_size=1, on_error=nothing,)
 #
 make_video_1d(param)

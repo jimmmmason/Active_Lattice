@@ -18,10 +18,9 @@ for λ in λs
         push!(params,param)
 end
 end
+param = params[1]
 #run sims
 pmap(run_sim, params; distributed = true, batch_size=1, on_error=nothing,)
-run_sim(params[1])
-interrupt()
 #plot symmetry
 clf()
 ρ = 0.95
@@ -54,8 +53,8 @@ display(fig)
 PyPlot.savefig("translation_invariance_ρ=$(ρ).pdf",dpi = 300, format = "pdf")
 #create vids
 @distributed for param ∈ params
-    T = 5.0
-    t_saves, η_saves = load_etas(param, T)
+    T = 0.5
+    t_saves, η_saves = load_etas(param, T; dump_interval = 0.001)
     animate_etas(param,t_saves,η_saves)
 end
 #load plots 

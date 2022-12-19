@@ -296,7 +296,7 @@ function perturb_pde_1d!(param::Dict{String,Any}, density::Dict{String,Any}; δ 
             ω = 2*π
             q,m1,m2,γ = mstabparams_lite(ρa,ρ,Dx,Pe,Dθ)
             matrix = MathieuMatrix(q,m1,m2; k=k);
-            _, A = MathieuEigen(matrix, γ);
+            a, A = MathieuEigen(matrix, γ);
             B = 0.
             Pa = (x,θ) -> real.( dot(A[:,1],cos.(θ*K*(2*π/Nθ)))*exp(im*x*ω/Nx) )
             Pp = (x) -> B*cos(x*ω/Nx);
@@ -304,9 +304,9 @@ function perturb_pde_1d!(param::Dict{String,Any}, density::Dict{String,Any}; δ 
             K = collect(0:1:(k-1))
             c,ω = ap_mstabparams_lite(ρa,ρp,Dx,Pe,Dθ)
             matrix = ap_MathieuMatrix(c, ω; k=k)
-            _, A = ap_MathieuEigen(matrix)
+            a, A = ap_MathieuEigen(matrix)
             Pa = (x,θ) -> real.( dot(A[2:1:(k+1),k+1],cos.(θ*K*(2*π/Nθ)))*exp(im*x*ω/Nx) )
-            Pp = (x) -> real.(A[1,1]*exp(im*x*ω/Nx));
+            Pp = (x) -> real.(A[1,k+1]*exp(im*x*ω/Nx));
         end
     end
     if pert == "rand"

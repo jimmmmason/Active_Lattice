@@ -89,7 +89,7 @@ end
 
 ##
 
-
+#=
 function ap_mstabparams_lite(ρa,ρp,Dx,Pe,Dθ)
     ρ = ρa + ρp
     v0 = Pe*sqrt(Dθ)
@@ -108,26 +108,35 @@ function ap_mstabparams_lite(ρa,ρp,Dx,Pe,Dθ)
     ω = 2 * pi
     return c, ω
 end
+=#
 
-function ap_MathieuMatrix(c, ω; k::Int64 = 10)
+function ap_MathieuMatrix(ρa,ρp,Dx,Pe,Dθ; k::Int64 = 10, ω = 2*π)
+    ρ = ρa + ρp
+    v0 = Pe*sqrt(Dθ)
+    ds = self_diff(ρ)
+    dp = self_diff_prime(ρ)
+    DD = (1-ds)/ρ
+    s = DD - 1
+    p = -Dx*ds*ω^2
+    q = -v0*im*ω*ds
     matrix = Complex.(zeros(k+1, k+1))
     for u in 1:(k+1)
         for v in 1:(k+1)
             if abs(u - v) == 1
-                matrix[u, v] = im * c[5] * ω
+                matrix[u, v] = q
             elseif u == v
-                matrix[u, v] = - c[1]*ω^2-c[6]*(u-2)^2 
+                matrix[u, v] = p - Dθ*(u-2)^2 
             end
         end
     end
-    matrix[1, 1] = -(c[7]+ (2*π)*c[8])*ω^2
-    matrix[1, 2] = - c[8]*ω^2
-    matrix[1, 3] = c[9]*im*ω
-    matrix[2, 1] = - c[2]*ω^2/(2*π)
-    matrix[2, 2] = -(c[1]+ c[2])*ω^2
-    matrix[2, 3] = (c[3]+ c[5])*im*ω
-    matrix[3, 1] = (c[4])*im*ω/(2*π)
-    matrix[3, 2] = (c[4]+ c[5])*im*ω
+    matrix[1, 1] = - Dx*(ω^2)*(ds+ρp*DD)
+    matrix[1, 2] = - 2*π*Dx*(ω^2)*ρp*DD
+    matrix[1, 3] = - v0*im*ω*π*ρp*s
+    matrix[2, 1] = - Dx*(ω^2)*(ρa/(2*π))*DD
+    matrix[2, 2] = - Dx*(ω^2)*(ds+ρa*DD)
+    matrix[2, 3] = - v0*im*ω*(ρa*s+ds)/2
+    matrix[3, 1] = - v0*im*ω*(ρa/(2*π))*dp
+    matrix[3, 2] = - v0*im*ω*(ρa*dp+ds)
     return matrix
 end
 
@@ -141,15 +150,13 @@ function ap_MathieuEigen_lite(matrix; k=20)
 end
 
 function ap_lin_stab_line(ρa,ρp; Dx =1. ,Pe = 1., Dθ = 100., k = 20 )
-    c,ω = ap_mstabparams_lite(ρa,ρp,Dx,Pe,Dθ)
-    matrix = ap_MathieuMatrix(c,ω; k = k);
+    matrix = ap_MathieuMatrix(ρa,ρp,Dx,Pe,Dθ; k = k);
     amin = ap_MathieuEigen_lite(matrix; k = k)  
     return real(amin)
 end
 
-function ap_lin_stab_imaginary(ρa,ρp; Dx =1. ,Pe = 1., Dθ = 100., k = 20 )
-    c,ω = ap_mstabparams_lite(ρa,ρp,Dx,Pe,Dθ)
-    matrix = ap_MathieuMatrix(c,ω; k = k);
+function ap_lin_stab_imaginary(ρa,ρp; Dx =1. ,Pe = 1., Dθ = 100., k = 40 )
+    matrix = ap_MathieuMatrix(ρa,ρp,Dx,Pe,Dθ; k = k);
     amin = ap_MathieuEigen_lite(matrix; k = k)  
     return imag(amin)
 end

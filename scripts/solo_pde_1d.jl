@@ -78,32 +78,39 @@ fig, ax = PyPlot.subplots(figsize =(10, 10))
 ax.plot(fa)
 display(fig)
 
-density = initialize_density(param)
+density = initialize_density_1d(param)
 #perturb_pde!(param,density; pert = "rand",δ = δ);
 perturb_pde!(param,density; pert = "n=1",δ = δ);
 
 @time for i in 1:100 pde_stepper_1d!(param,density) end 
 
-pde_stepper_1d!(param,density)
-@unpack fa = density
-maximum(fa)
+pde_stepper!(param,density)
+@unpack fa, fp,t = density
+ρ = fp+ sum(fa; dims =3)[:,:,1].*(2*π/Nθ)
+maximum(ρ)
 
+
+
+pde_stepper_1d!(param,density)
+@unpack fa, fp,t = density
+ρ = fp+ sum(fa; dims =2)[:,1].*(2*π/Nθ)
+maximum(ρ)
+t
 
 pde_stepper!(param,density)
 
 @unpack fa, fp, t = density
 maximum(abs.(fa1[:,:] - fa[:,1,:]))
 
+
+param = params[1]
 i = 1
-fa = fa_saves[i]
-    fig, ax = PyPlot.subplots(figsize =(10, 10))
-    #@unpack fa1, fp1, t = density1
-    #ρ = sum(fa1; dims =2)[:,1].*(2*π/Nθ)
-    #ax.plot(ρ)
-    #fa1 = density1["fa"];
+@unpack T, save_interval = param
+t_saves, fa_saves, fp_saves = load_pdes(param,T; save_interval = save_interval)
+
+fa = fp_saves[i]
+fig, ax = PyPlot.subplots(figsize =(10, 10))
     ax.plot(fa)
-    #ρ = sum(fa1; dims =2)[:,1].*(2*π/Nθ)
-    #ax.plot(ρ)
     i+=1
 display(fig)
 
