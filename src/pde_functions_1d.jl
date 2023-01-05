@@ -302,8 +302,8 @@ function perturb_pde_1d!(param::Dict{String,Any}, density::Dict{String,Any}; δ 
             Pp = (x) -> B*cos(x*ω/Nx);
         else
             K = collect(0:1:(k-1))
-            c,ω = ap_mstabparams_lite(ρa,ρp,Dx,Pe,Dθ)
-            matrix = ap_MathieuMatrix(c, ω; k=k)
+            matrix = ap_MathieuMatrix(ρa,ρp,Dx,Pe,Dθ; k=k)
+            ω = 2*π
             a, A = ap_MathieuEigen(matrix)
             Pa = (x,θ) -> real.( dot(A[2:1:(k+1),k+1],cos.(θ*K*(2*π/Nθ)))*exp(im*x*ω/Nx) )
             Pp = (x) -> real.(A[1,k+1]*exp(im*x*ω/Nx));
@@ -414,7 +414,6 @@ end
 
 function refresh_stab_data_1d(;stabdata = Dict{String,Any}(), ρs = 0.05:0.05:0.95,   Dθ = 10., Nx = 50, Nθ = 20, λs = 5.:5.:100., name = "high_density_stability_v4", save_on = true, t_end = 1.0, ρp = 0.)
     filename = "/store/DAMTP/jm2386/Active_Lattice/data/pde_pro/$(name)/stability_Nx=$(Nx)_Nθ=$(Nθ)_Dθ=$(Dθ)_ρp=$(ρp).jld2"
-
     if save_on
         try 
             stabdata = wload(filename)

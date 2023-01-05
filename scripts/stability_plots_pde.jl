@@ -27,7 +27,7 @@ Pes = collect(5.:5.:100.)
 name = "stability_1d_actpass_2"
 T  = 1.0
 Dθ = 100.
-ρp = 0.2
+ρp = 0.4
 ρs  = collect(0.4:0.05:1.0)
 Pes = collect(0.:5.0:100.)
     Nx = 50
@@ -40,7 +40,7 @@ T  = 2.0
 Dθ = 100.
 ρp = 0.4
 ρs  = collect(ρp:0.1:1.0)
-Pes = collect(0.:10.0:400.)
+Pes = collect(0.:10.0:100.)
     Nx = 50
     Nθ = 20
     λs = Pes*sqrt(Dθ)
@@ -100,24 +100,41 @@ Plot stability
 fig, ax = PyPlot.subplots(figsize =(10, 10))
 xs = append!(collect(0.01:0.01:0.9),collect(0.901:0.001:0.999))
 ys = collect(0:1:maximum(Pes))
-plot_stab(fig, ax, stabdata; ρs = ρs ,xs = xs, ys =ys, xtic = (minimum(ρs)-ρp):0.01:(maximum(ρs)-ρp), ytic = 0:100:maximum(Pes), axlim = [minimum(ρs)-ρp, maximum(ρs)-ρp, minimum(Pes), maximum(Pes)], Dθ = Dθ,ρp=ρp)
+plot_stab(fig, ax, stabdata; ρs = ρs ,xs = xs, ys =ys, xtic = (minimum(ρs)-ρp):0.1:(maximum(ρs)-ρp), ytic = 0:10:maximum(Pes), axlim = [minimum(ρs)-ρp, maximum(ρs)-ρp, minimum(Pes), maximum(Pes)], Dθ = Dθ,ρp=ρp)
 display(fig)
 
 
 
 #Dθ = (40.)^2
+Dx = 1.
 fig, ax = PyPlot.subplots(figsize =(10, 10))
-xs = append!(collect(0.01:0.01:0.9),collect(0.901:0.001:0.999))
-ys = collect(0:1:maximum(Pes))
-plot_stab(fig, ax, stabdata; ρs = ρs ,xs = xs, ys =ys, xtic = (minimum(ρs)-ρp):0.1:(maximum(ρs)-ρp), ytic = 0:100:maximum(Pes), axlim = [minimum(ρs)-ρp, maximum(ρs)-ρp, minimum(Pes), maximum(Pes)], Dθ = Dθ,ρp=ρp)
-x = xs
+xs = append!(collect(0.01:0.001:0.9),collect(0.901:0.001:0.999))
+ys = collect(0:0.1:maximum(Pes))
+xtic = (minimum(ρs)-ρp):0.1:(maximum(ρs)-ρp)
+ytic = 0:10:maximum(Pes)
+axlim = [minimum(ρs)-ρp, maximum(ρs)-ρp, minimum(Pes), maximum(Pes)]
+ax.xaxis.set_ticks(xtic)
+    ax.yaxis.set_ticks(ytic)
+    ax.axis(axlim)
+    ax.set_xlabel("ρa")
+    ax.set_ylabel("Pe")
+    ax.set_title("Dθ= $(Dθ), ρᵖ = $(ρp)")
+    x = xs
     y = ys
     n = length(x)
+    m = length(y)
+    z = zeros(m,n)
+        for i in 1:m, j in 1:n
+            z[i,j] = ap_lin_stab_line(x[j]-ρp,ρp; Dx =Dx ,Pe = y[i], Dθ = Dθ,k =20)
+        end
+ax.contour(x.+(-ρp),y,z; levels = [0])
+
+n = length(x)
     m = length(y)
     z = zeros(m,n);
     Dx =1 
         for i in 1:m, j in 1:n
-            z[i,j] = abs(ap_lin_stab_imaginary(x[j]-ρp,ρp; Dx =Dx ,Pe = y[i], Dθ = Dθ))
+            z[i,j] = abs(ap_lin_stab_imaginary(x[j]-ρp,ρp; Dx =Dx ,Pe = y[i], Dθ = Dθ, k =20))
         end
 
     colmap = PyPlot.plt.cm.viridis_r
@@ -128,7 +145,10 @@ x = xs
 display(fig)
 ###
 #save
-PyPlot.savefig("stability_ρp=$(ρp)_Dθ=$(Dθ).pdf",dpi = 100, format = "pdf")
+pathname = "/store/DAMTP/jm2386/Active_Lattice/plots/stabiliy_imaginary/$(name)";
+mkpath(pathname)
+filename = "/store/DAMTP/jm2386/Active_Lattice/plots/stabiliy_imaginary/$(name)/Nx=$(Nx)_Nθ=$(Nθ).pdf";
+PyPlot.savefig(filename,dpi = 100, format = "pdf")
 ###
 
 ap_lin_stab_line(0.225,0.5; Dx =1. ,Pe = 377.037855, Dθ =100.,k=50 )

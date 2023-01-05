@@ -121,7 +121,9 @@ function plot_pde(fig::Figure, axs ::Array{PyObject,1} , param::Dict{String,Any}
     plot_pde_mass(fig,axs[1],param,density)
     plot_pde_mag( fig,axs[2],param,density)
     l = 1/sqrt(Dθ)
-    fig.suptitle("ρₐ = $(ρa),  ρₚ = $(ρp), Pe = $(round(λ/sqrt(Dθ); digits = 3)), l = $(round(l; digits = 3)), t = $(round(t; digits = 3))",size  =15. )
+    ρ = ρa+ρp
+    χ = ρa/ρ
+    fig.suptitle("ϕ = $(round(ρ; digits = 2)),  χ = $(round(χ; digits = 2)), Pe = $(round(λ/sqrt(Dθ); digits = 3)), l = $(round(l; digits = 3)), t = $(round(t; digits = 3))",size  =15. )
     return fig
 end 
 
@@ -140,106 +142,6 @@ function plot_pde_lite!(fig,param::Dict{String,Any}, t, fa, fp )
     
     return fig
 end 
-
-
-function plot_stab(fig, ax, stabdata; ρs = 0.05:0.05:0.95 ,xs = collect(0.01:0.01:0.99), ys =  collect(0.0:0.1:100.),xtic = 0:0.2:1, ytic = 0:10:100, axlim = [0., 1., 0., 100.], Dθ = 100., Dx =1.,ρp = 0. )
-    stable_points = []
-    lin_stable_points = []
-    unstable_points = []
-    unsure_points = []
-    binodal_y = Array{Float64,1}([])
-    binodal_x = Array{Float64,1}([])
-    for ρ in ρs
-            @unpack stable, lin_stab, unstable, unsure = stabdata["ρ = $(ρ)"]
-            for λ ∈ stable
-                    append!(stable_points,  [ρ-ρp; λ/sqrt(Dθ)])
-                    
-            end
-            for λ ∈ lin_stab
-                append!(lin_stable_points,  [ρ-ρp; λ/sqrt(Dθ)])
-            end
-            for λ ∈ unstable
-                    append!(unstable_points, [ρ-ρp; λ/sqrt(Dθ)])
-            end
-            for λ ∈ unsure
-                    append!(unsure_points, [ρ-ρp; λ/sqrt(Dθ)])
-            end
-            try
-                local y
-                y = (maximum(stable)+minimum(unstable))/2
-                push!(binodal_y,y)
-                push!(binodal_x,ρ)
-            catch
-            end
-    end             
-    stable_points   = reshape(stable_points, (2,Int64(length(stable_points)/2)) )
-    lin_stable_points   = reshape(stable_points, (2,Int64(length(stable_points)/2)) )
-    unstable_points = reshape(unstable_points, (2,Int64(length(unstable_points)/2)) )
-    unsure_points = reshape(unsure_points, (2,Int64(length(unsure_points)/2)) )
-
-    #=
-    lower_bound = λsym.(xs; Dθ = Dθ)/sqrt(Dθ)
-    ax.plot(xs,lower_bound, color = "black")
-    =#
-    
-    x = xs
-    y = ys
-    n = length(x)
-    m = length(y)
-    z = zeros(m,n)
-    if ρp ==0.
-        for i in 1:m, j in 1:n
-            z[i,j] = lin_stab_line(x[j]; Dx =Dx ,Pe = y[i], Dθ = Dθ)
-        end
-    else
-        for i in 1:m, j in 1:n
-            z[i,j] = ap_lin_stab_line(x[j]-ρp,ρp; Dx =Dx ,Pe = y[i], Dθ = Dθ)
-        end
-    end
-    ax.contour(x.+(-ρp),y,z; levels = [0])
-    
-
-    #=
-    fit = curve_fit(RationalPoly, collect(binodal_x), collect(binodal_y), 2,2)
-    binodal_y = fit.(xs)
-    ax.plot(xs,binodal_y, color = "black", linestyle = "--")
-    =#
-    
-    ax.errorbar(stable_points[1,:],stable_points[2,:], 
-    #markersize = 400/L, 
-    fmt= "o", 
-    color = "yellow",
-    alpha=0.8,
-    )
-
-    ax.errorbar(lin_stable_points[1,:],stable_points[2,:], 
-    #markersize = 400/L, 
-    fmt= "o", 
-    color = "green",
-    alpha=0.8,
-    )
-
-    ax.errorbar(unstable_points[1,:],unstable_points[2,:], 
-    #markersize = 400/L, 
-    fmt= "o", 
-    color = "red",
-    alpha=0.8,
-    )
-
-    ax.errorbar(unsure_points[1,:],unsure_points[2,:], 
-    #markersize = 400/L, 
-    fmt= "o", 
-    color = "blue",
-    alpha=0.8,
-    )
-
-    ax.xaxis.set_ticks(xtic)
-    ax.yaxis.set_ticks(ytic)
-    ax.axis(axlim)
-    ax.set_xlabel("ρa")
-    ax.set_ylabel("Pe")
-    ax.set_title("Dθ= $(Dθ), ρᵖ = $(ρp)")
-end
 
 function Stability_condition(ϕ,Dx,Pe,Dθ)
     v0 = Pe*sqrt(Dθ);
@@ -268,8 +170,9 @@ end
 
 ###
 
-function make_video_1d(param)
+function make_video_1d(param; frames = 100.)
     @unpack T, save_interval = param
+    save_interval = T/frames
     t_saves, fa_saves, fp_saves = load_pdes(param,T; save_interval = save_interval)
     animate_pdes_1d(param,t_saves,fa_saves,fp_saves)
 end

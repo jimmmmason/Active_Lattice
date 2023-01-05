@@ -261,6 +261,12 @@ function animate_etas(param,t_saves,η_saves)
     myanim[:save](filename, bitrate=-1, dpi= 100, extra_args=["-vcodec", "libx264", "-pix_fmt", "yuv420p"])
 end
 
+function make_sim_vid(param)
+    @unpack T = param
+    t_saves, η_saves = load_etas(param, T; dump_interval = 0.001)
+    animate_etas(param,t_saves,η_saves)
+end
+
 function plot_eta(fig::Figure, ax::PyObject, param::Dict{String,Any}, t::Float64, η::Array{Float64,3}; title = true, r =5)
     @unpack name, L, λ, γ, ρa, ρp, E, Δt, site_distribution, angles, rates = param
     ax.clear()

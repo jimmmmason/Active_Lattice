@@ -65,20 +65,21 @@ pmap(perturb_pde_run_1d, params; distributed = true, batch_size=1, on_error=noth
 
 params = []
 pert = "n=1"
-T  = 0.010
+T  = 1.0
+ρp = 0.4
 using Roots
-f(x) = ap_lin_stab_line(x,0.5; Dx =1. ,Pe = 350., Dθ =100.,k=50 )
-root = find_zero(f, (0.22,  0.23))
-for ρa in [root], ρp in [0.5], Pe in [350.], Dθ in [100.], δ in [1e-6],k in [40], i in [2]
-        Nx = 256*i
-        Nθ = 256*i
-        name = "stability_1d_actpass_2_Nx=$(Nx)_δ=$(δ)"
+f(x) = ap_lin_stab_line(x,ρp; Dx =1. ,Pe = 20., Dθ =100.,k=40 )
+root = find_zero(f, (0.1,  0.3))
+for ρa in [root], ρp in [ρp], Pe in [20.], Dθ in [100.], δ in [1e-6],k in [40]
+        Nx = 128
+        Nθ = 64
+        name = "stability_1d_actpass_3_δ=$(δ)"
         local param
                 #
                 param = pde_param_k(; name = name, 
                         ρa = ρa, Pe = Pe, ρp = ρp, T = T, 
                         Dθ = Dθ, δt = 1e-5, Nx = Nx, Nθ = Nθ, 
-                        save_interval = 1e-5, max_steps = 1e8,
+                        save_interval = 1e-4, max_steps = 1e8,
                         pert = pert, δ = δ, k=k
                 )
                 #
@@ -97,4 +98,4 @@ pmap(perturb_pde_run_1d, params; distributed = true, batch_size=1, on_error=noth
 ###
 pmap(make_video_1d, params; distributed = true, batch_size=1, on_error=nothing,)
 #
-make_video_1d(param)
+make_video_1d(params[1]; frames = 1000)

@@ -149,7 +149,7 @@ function ap_MathieuEigen_lite(matrix; k=20)
     return  eigvals(matrix)[k+1]
 end
 
-function ap_lin_stab_line(ρa,ρp; Dx =1. ,Pe = 1., Dθ = 100., k = 20 )
+function ap_lin_stab_line(ρa,ρp; Dx =1. ,Pe = 50., Dθ = 100., k = 40 )
     matrix = ap_MathieuMatrix(ρa,ρp,Dx,Pe,Dθ; k = k);
     amin = ap_MathieuEigen_lite(matrix; k = k)  
     return real(amin)
