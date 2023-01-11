@@ -3,6 +3,7 @@ using DrWatson
 using Roots
 @quickactivate "Active_Lattice"
 include("/home/jm2386/Active_Lattice/src/article_src.jl")
+#
 @everywhere include("/home/jm2386/Active_Lattice/src/article_src.jl")
 ###
 PyPlot.close("all")
@@ -135,8 +136,8 @@ display(fig)
 ###
 #travelling wave plots 1d
 #
+T  = 0.5
 pert = "n=1"
-    T  = 2.0
     χ = 0.25
     using Roots
     f(x) = lin_stab_line_fraction(x,χ; Dx =1. ,Pe = 20., Dθ =100.,k=40 )
@@ -156,12 +157,33 @@ param = pde_param_fraction(; name = name,
 )
 #
 frames = 100.
-save_interval = T/frames
-t_saves, fa_saves, fp_saves = load_pdes(param,2.0; save_interval = save_interval)
-fig, axs = plt.subplots(2, 2, figsize=(12,8))
-i =100
-vid_phase_pde_plot_1d(fig, axs, param, t_saves, fa_saves, fp_saves, i)
+save_interval = 0.1*T/frames
+t_saves, fa_saves, fp_saves = load_pdes(param,T; save_interval = save_interval)
+fig, axs = plt.subplots(3, 2, figsize=(12,12))
+i =27
+test_vid_phase_pde_plot_1d(fig, axs, param, t_saves, fa_saves, fp_saves, i)
 display(fig)
+
+
+minimum(ρa_saves[270])-ρa
+minimum((minimum.(ρa_saves).-ρa))
+
+minimum((minimum(ρa_saves[1]).-ρa))
+
+spatial_fourier_mode2(ρ; Nx = Nx)
+
+
+spatial_fourier_mode2s(ρa_saves,ρa_saves; Nx = Nx)
+
+
+
+mean(ρp_saves[1])-ρp
+
+maximum(maximum(ρa_saves))-ρa
+minimum(minimum(ρa_saves))-ρa
+
+
+animate_phase_pdes_1d(param,t_saves,fa_saves,fp_saves; frames = 99)
 ###
 
 

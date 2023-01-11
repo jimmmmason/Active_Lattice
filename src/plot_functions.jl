@@ -287,53 +287,63 @@ end
 
 # 1d wave plots 
 
-function make_phase_video_1d(param; frames = 100.)
+function make_phase_video_1d(param; frames = 100)
     @unpack T, save_interval = param
-    save_interval = T/frames
+    save_interval = 0.1*T/frames
     t_saves, fa_saves, fp_saves = load_pdes(param,T; save_interval = save_interval)
-    animate_pdes_1d(param,t_saves,fa_saves,fp_saves)
+    animate_phase_pdes_1d(param,t_saves,fa_saves,fp_saves; frames = frames-1)
 end
 
 
-function animate_phase_pdes_1d(param,t_saves,fa_saves,fp_saves)
+function animate_phase_pdes_1d(param,t_saves,fa_saves,fp_saves; frames = 99)
     @unpack name, λ, ρa, ρp, Nx, Nθ, δt = param
-    frames = length(t_saves)-1
-    fig, axs = plt.subplots(1, 2, figsize=(12,5))
+    fig, axs = plt.subplots(2, 2, figsize=(12,8))
     function makeframe(i)
         clf()
-        vid_phase_pde_plot_1d(fig, axs, param, t_saves, fa_saves, fp_saves, i)
+        ax1 = fig.add_subplot(321)
+        ax2 = fig.add_subplot(322)
+        ax3 = fig.add_subplot(323)
+        ax4 = fig.add_subplot(324)
+        ax5 = fig.add_subplot(325)
+        ax6 = fig.add_subplot(326)
+        axs = ax1, ax2, ax3, ax4, ax5, ax6
+        test_vid_phase_pde_plot_1d(fig, axs, param, t_saves, fa_saves, fp_saves, i+1)
         return fig
     end
     interval = Int64(round(10000/frames))
     myanim = anim.FuncAnimation(fig, makeframe, frames=frames, interval=interval)
     # Convert it to an MP4 movie file and saved on disk in this format.
-    T = t_saves[frames+1]
+    T = t_saves[10*frames+10]
     pathname = "/store/DAMTP/jm2386/Active_Lattice/plots/vids/pde_phase_vids/$(name)/active=$(ρa)_passive=$(ρp)_lamb=$(λ)";
     mkpath(pathname)
     filename = "/store/DAMTP/jm2386/Active_Lattice/plots/vids/pde_phase_vids/$(name)/active=$(ρa)_passive=$(ρp)_lamb=$(λ)/time=$(round(T; digits = 5))_Nx=$(Nx)_Nθ=$(Nθ)_active=$(ρa)_passive=$(ρp)_lamb=$(λ).mp4";
     myanim[:save](filename, bitrate=-1, dpi= 100, extra_args=["-vcodec", "libx264", "-pix_fmt", "yuv420p"])
 end 
 
-function vid_phase_pde_plot_1d(fig::Figure, axs ::Array{PyObject,2}, param::Dict{String,Any}, t_saves, fa_saves, fp_saves, i)
-    @unpack Nx, Nθ, ρa, ρp = param
+function test_vid_phase_pde_plot_1d(fig::Figure, axs, param::Dict{String,Any}, t_saves, fa_saves, fp_saves, i)
+    @unpack Nx, Nθ, ρa, ρp, χ = param
     ρa_saves, ρp_saves = spatial_densities(fa_saves, fp_saves; Nx= Nx, Nθ = Nθ)
-    phasea_saves, phasep_saves = spatial_fourier_modes(ρa_saves, ρp_saves; Nx = 50) 
+    phasea_saves, phasep_saves = spatial_fourier_modes(ρa_saves, ρp_saves; Nx = Nx) 
+    phase2a_saves, phase2p_saves = spatial_fourier_mode2s(ρa_saves, ρp_saves; Nx = Nx) 
 
-    axs[1].plot((1:Nx)/Nx,ρa_saves[i].-ρa, color = "red")
-    axs[1].plot((1:Nx)/Nx,ρp_saves[i].-ρp, color = "black")
+    axs[1].plot((1:Nx)/Nx,ρa_saves[10*i].-ρa, color = "red")
+    axs[1].plot((1:Nx)/Nx,ρp_saves[10*i].-ρp, color = "black")
     #axs[1].xaxis.set_ticks(xtic)
     #axs[1].yaxis.set_ticks(ytic)
     #axs[1].axis(axlim)
+    axs[1].axis([0., 1., minimum(minimum.(ρa_saves))-ρa,maximum(maximum.(ρa_saves))-ρa])
     axs[1].set_xlabel("x")
     axs[1].set_ylabel("ρₐ-ϕₐ,ρₚ-ϕₚ")
-    axs[1].set_title("ℓ= $(1/sqrt(Dθ)), χ = $(χ)")
+    axs[1].set_title("t = $(round(t_saves[10*i]; digits = 3))")
 
-    axs[2].plot((1:Nx)/Nx,mag_1d(fa_saves[i]; Nθ = Nθ), color = "red")
+
+    axs[2].plot((1:Nx)/Nx,mag_1d(fa_saves[10*i]; Nθ = Nθ), color = "red")
     #axs[1].xaxis.set_ticks(xtic)
     #axs[1].yaxis.set_ticks(ytic)
     #axs[1].axis(axlim)
     axs[2].set_xlabel("x")
     axs[2].set_ylabel("m")
+    axs[2].axis([0., 1., minimum(minimum.(mag_1d.(fa_saves; Nθ = Nθ))),maximum(maximum.(mag_1d.(fa_saves; Nθ = Nθ)))])
 
     axs[3].plot(t_saves, abs.(phasea_saves), color = "red", label = "Active")
     axs[3].plot(t_saves, abs.(phasep_saves), color = "black", label = "Passive")
@@ -342,8 +352,11 @@ function vid_phase_pde_plot_1d(fig::Figure, axs ::Array{PyObject,2}, param::Dict
     #axs[3].axis(axlim)
     axs[3].set_xlabel("t")
     #ax.set_ylabel("Pe")
-    axs[3].set_ylabel("Amlitude")
-    axs[3].legend(loc = "upper right")
+    axs[3].set_ylabel("1ˢᵗ mode amplitude")
+    #axs[3].legend(loc = "upper right")
+    axs[3].scatter(t_saves[10*i],abs.(phasea_saves)[10*i],color = "red")
+    axs[3].scatter(t_saves[10*i],abs.(phasep_saves)[10*i],color = "black")
+    #axs[3].set_aspect(maximum(t_saves)/maximum(abs.(phasea_saves)))
 
     axs[4].plot(t_saves, phase_args(angle.(phasea_saves)), color = "red")
     axs[4].plot(t_saves, phase_args(angle.(phasep_saves)), color = "black")
@@ -351,7 +364,36 @@ function vid_phase_pde_plot_1d(fig::Figure, axs ::Array{PyObject,2}, param::Dict
     #axs[2].yaxis.set_ticks(ytic)
     #axs[2].axis(axlim)
     axs[4].set_xlabel("t")
-    axs[4].set_ylabel("Phase")
+    axs[4].set_ylabel("1ˢᵗ mode phase")
+    axs[4].scatter(t_saves[10*i],phase_args(angle.(phasea_saves))[10*i],color = "red")
+    axs[4].scatter(t_saves[10*i],phase_args(angle.(phasep_saves))[10*i],color = "black")
+    #axs[4].set_aspect(maximum(t_saves)/(maximum(phase_args(angle.(phasea_saves)))-minimum(phase_args(angle.(phasea_saves)))))
+
+    axs[5].plot(t_saves, abs.(phase2a_saves), color = "red", label = "Active")
+    axs[5].plot(t_saves, abs.(phase2p_saves), color = "black", label = "Passive")
+    #axs[3].xaxis.set_ticks(xtic)
+    #axs[3].yaxis.set_ticks(ytic)
+    #axs[3].axis(axlim)
+    axs[5].set_xlabel("t")
+    #ax.set_ylabel("Pe")
+    axs[5].set_ylabel("2ⁿᵈ mode amlitude")
+    axs[5].legend(loc = "upper right")
+    axs[5].scatter(t_saves[10*i],abs.(phase2a_saves)[10*i],color = "red")
+    axs[5].scatter(t_saves[10*i],abs.(phase2p_saves)[10*i],color = "black")
+    #axs[3].set_aspect(maximum(t_saves)/maximum(abs.(phasea_saves)))
+
+    axs[6].plot(t_saves, phase_args(angle.(phase2a_saves)), color = "red")
+    axs[6].plot(t_saves, phase_args(angle.(phase2p_saves)), color = "black")
+    #axs[2].xaxis.set_ticks(xtic)
+    #axs[2].yaxis.set_ticks(ytic)
+    #axs[2].axis(axlim)
+    axs[6].set_xlabel("t")
+    axs[6].set_ylabel("2ⁿᵈ mode phase")
+    axs[6].scatter(t_saves[10*i],phase_args(angle.(phase2a_saves))[10*i],color = "red")
+    axs[6].scatter(t_saves[10*i],phase_args(angle.(phase2p_saves))[10*i],color = "black")
+
+    fig.suptitle("ℓ= $(1/sqrt(Dθ)), χ = $(χ), ρ = $(round(ρa+ρp;digits = 3))", fontsize = 20, y = 1.05)
+    fig.tight_layout()
 end
 
 function phase_pde_plot_1d_test(fig::Figure, axs ::Array{PyObject,2}, param::Dict{String,Any}, t_saves, fa_saves, fp_saves)
@@ -391,7 +433,6 @@ function phase_args(phase_saves)
     return cnts_phase
 end
 
-
 function spatial_fourier_modes(ρa_saves, ρp_saves; Nx = 50)
     phasea_saves, phasep_saves = [], []
     for ρa in ρa_saves
@@ -409,6 +450,27 @@ function spatial_fourier_mode(ρ; Nx = 50)
     phase = 0.
     for x in 1:Nx
         phase += ρ[x]*exp(-2*π*im*x/Nx)/Nx
+    end
+    return phase
+end
+
+function spatial_fourier_mode2s(ρa_saves, ρp_saves; Nx = 50)
+    phasea_saves, phasep_saves = [], []
+    for ρa in ρa_saves
+        phase = spatial_fourier_mode2(ρa; Nx = Nx) 
+        push!(phasea_saves,phase)
+    end
+    for ρp in ρp_saves
+        phase = spatial_fourier_mode2(ρp; Nx = Nx) 
+        push!(phasep_saves,phase)
+    end
+    return phasea_saves, phasep_saves
+end
+
+function spatial_fourier_mode2(ρ; Nx = 50)
+    phase = 0.
+    for x in 1:Nx
+        phase += ρ[x]*exp(-2*π*im*2*x/Nx)/Nx
     end
     return phase
 end
