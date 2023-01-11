@@ -285,4 +285,140 @@ function plot_pde_mass_1d(fig::Figure, ax::PyObject, param::Dict{String,Any}, de
     return fig
 end 
 
+# 1d wave plots 
+
+function make_phase_video_1d(param; frames = 100.)
+    @unpack T, save_interval = param
+    save_interval = T/frames
+    t_saves, fa_saves, fp_saves = load_pdes(param,T; save_interval = save_interval)
+    animate_pdes_1d(param,t_saves,fa_saves,fp_saves)
+end
+
+
+function animate_phase_pdes_1d(param,t_saves,fa_saves,fp_saves)
+    @unpack name, λ, ρa, ρp, Nx, Nθ, δt = param
+    frames = length(t_saves)-1
+    fig, axs = plt.subplots(1, 2, figsize=(12,5))
+    function makeframe(i)
+        clf()
+        vid_phase_pde_plot_1d(fig, axs, param, t_saves, fa_saves, fp_saves, i)
+        return fig
+    end
+    interval = Int64(round(10000/frames))
+    myanim = anim.FuncAnimation(fig, makeframe, frames=frames, interval=interval)
+    # Convert it to an MP4 movie file and saved on disk in this format.
+    T = t_saves[frames+1]
+    pathname = "/store/DAMTP/jm2386/Active_Lattice/plots/vids/pde_phase_vids/$(name)/active=$(ρa)_passive=$(ρp)_lamb=$(λ)";
+    mkpath(pathname)
+    filename = "/store/DAMTP/jm2386/Active_Lattice/plots/vids/pde_phase_vids/$(name)/active=$(ρa)_passive=$(ρp)_lamb=$(λ)/time=$(round(T; digits = 5))_Nx=$(Nx)_Nθ=$(Nθ)_active=$(ρa)_passive=$(ρp)_lamb=$(λ).mp4";
+    myanim[:save](filename, bitrate=-1, dpi= 100, extra_args=["-vcodec", "libx264", "-pix_fmt", "yuv420p"])
+end 
+
+function vid_phase_pde_plot_1d(fig::Figure, axs ::Array{PyObject,2}, param::Dict{String,Any}, t_saves, fa_saves, fp_saves, i)
+    @unpack Nx, Nθ, ρa, ρp = param
+    ρa_saves, ρp_saves = spatial_densities(fa_saves, fp_saves; Nx= Nx, Nθ = Nθ)
+    phasea_saves, phasep_saves = spatial_fourier_modes(ρa_saves, ρp_saves; Nx = 50) 
+
+    axs[1].plot((1:Nx)/Nx,ρa_saves[i].-ρa, color = "red")
+    axs[1].plot((1:Nx)/Nx,ρp_saves[i].-ρp, color = "black")
+    #axs[1].xaxis.set_ticks(xtic)
+    #axs[1].yaxis.set_ticks(ytic)
+    #axs[1].axis(axlim)
+    axs[1].set_xlabel("x")
+    axs[1].set_ylabel("ρₐ-ϕₐ,ρₚ-ϕₚ")
+    axs[1].set_title("ℓ= $(1/sqrt(Dθ)), χ = $(χ)")
+
+    axs[2].plot((1:Nx)/Nx,mag_1d(fa_saves[i]; Nθ = Nθ), color = "red")
+    #axs[1].xaxis.set_ticks(xtic)
+    #axs[1].yaxis.set_ticks(ytic)
+    #axs[1].axis(axlim)
+    axs[2].set_xlabel("x")
+    axs[2].set_ylabel("m")
+
+    axs[3].plot(t_saves, abs.(phasea_saves), color = "red", label = "Active")
+    axs[3].plot(t_saves, abs.(phasep_saves), color = "black", label = "Passive")
+    #axs[3].xaxis.set_ticks(xtic)
+    #axs[3].yaxis.set_ticks(ytic)
+    #axs[3].axis(axlim)
+    axs[3].set_xlabel("t")
+    #ax.set_ylabel("Pe")
+    axs[3].set_ylabel("Amlitude")
+    axs[3].legend(loc = "upper right")
+
+    axs[4].plot(t_saves, phase_args(angle.(phasea_saves)), color = "red")
+    axs[4].plot(t_saves, phase_args(angle.(phasep_saves)), color = "black")
+    #axs[2].xaxis.set_ticks(xtic)
+    #axs[2].yaxis.set_ticks(ytic)
+    #axs[2].axis(axlim)
+    axs[4].set_xlabel("t")
+    axs[4].set_ylabel("Phase")
+end
+
+function phase_pde_plot_1d_test(fig::Figure, axs ::Array{PyObject,2}, param::Dict{String,Any}, t_saves, fa_saves, fp_saves)
+    @unpack Nx, Nθ = param
+    ρa_saves, ρp_saves = spatial_densities(fa_saves, fp_saves; Nx= 50, Nθ = 20)
+    phasea_saves, phasep_saves = spatial_fourier_modes(ρa_saves, ρp_saves; Nx = 50) 
+
+    axs[1].plot(t_saves,ρa_saves,color = "red")
+    axs[1].plot(t_saves,ρa_saves,color = "black")
+
+    axs[2].plot(t_saves,ρa_saves,color = "red")
+    axs[2].plot(t_saves,ρa_saves,color = "black")
+end
+
+function spatial_densities(fa_saves, fp_saves; Nx= 50, Nθ = 20)
+    ρa_saves, ρp_saves = [], fp_saves
+    for fa in fa_saves
+        ρa = sum(fa; dims =2)[:,1].*(2*π/Nθ)
+        push!(ρa_saves,ρa)
+    end
+    return ρa_saves, ρp_saves
+end
+
+function phase_args(phase_saves)
+    cnts_phase = [phase_saves[1]]
+    L = length(phase_saves)
+    k = 0
+    for i in 2:L
+        x = phase_saves[i]-phase_saves[i-1]
+        if abs.(x)>3
+            push!(cnts_phase,phase_saves[i]-2*π*sign(x)-2*π*k)
+            k+= sign(x)
+        else 
+            push!(cnts_phase,phase_saves[i]-2*π*k)
+        end
+    end
+    return cnts_phase
+end
+
+
+function spatial_fourier_modes(ρa_saves, ρp_saves; Nx = 50)
+    phasea_saves, phasep_saves = [], []
+    for ρa in ρa_saves
+        phase = spatial_fourier_mode(ρa; Nx = 50) 
+        push!(phasea_saves,phase)
+    end
+    for ρp in ρp_saves
+        phase = spatial_fourier_mode(ρp; Nx = 50) 
+        push!(phasep_saves,phase)
+    end
+    return phasea_saves, phasep_saves
+end
+
+function spatial_fourier_mode(ρ; Nx = 50)
+    phase = 0.
+    for x in 1:Nx
+        phase += ρ[x]*exp(-2*π*im*x/Nx)/Nx
+    end
+    return phase
+end
+
+function mag_1d(fa; Nθ = 20)
+    eθ = cos.(1:Nθ*2π/Nθ)
+    @tensor begin
+        m[a] := 2π *fa[a,θ]*eθ[θ]/Nθ
+    end
+    return m
+end
+
 println("booted")

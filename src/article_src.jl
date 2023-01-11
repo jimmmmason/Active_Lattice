@@ -6,6 +6,7 @@ println("Loading ...")
 include("/home/jm2386/Active_Lattice/src/pde_functions_1d.jl")
 include("/home/jm2386/Active_Lattice/src/plot_functions.jl")
 include("/home/jm2386/Active_Lattice/src/pde_functions.jl")
+include("/home/jm2386/Active_Lattice/src/sim_functions.jl")
 include("/home/jm2386/Active_Lattice/src/lin_stab_solver.jl")
 ##
 function pde_param_fraction(; name = "test", D =1., Dx = 1., Pe =1., Dθ = 10, ρ= 0.5, χ = 1.0, Nx = 100, Nθ = 20, δt = 1e-5, T= 0.001, save_interval = 0.01, max_steps = 1e8, max_runs = 6, λ_step = 10., λmax = 100., λs = 20.:20.:100., pert = "n=1", δ = 0.01, k=20)
@@ -41,7 +42,7 @@ function sim_param_fraction(;  name = "test", D =1. , Pe =1. ,ρ = 0.5, χ = 0.5
             return 0.
         elseif n[1]==0.
             return 0.
-        elseif n[2]==2.
+        elseif n[1]==2.
             return L^2*D
         else
             return L^2*D + L*λ*E[i]⋅[cos(n[2]),sin(n[2])] 
@@ -232,10 +233,10 @@ function plot_stab_frac(fig, ax, stabdata; ρs = 0.4:0.05:1.0 ,xs = collect(0.4:
     ax.axis(axlim)
     ax.set_xlabel("ρ")
     ax.set_ylabel("Pe")
-    ax.set_title("ℓ= $(sqrt(Dθ)), χ = $(χ)")
+    ax.set_title("ℓ = $(1/sqrt(Dθ)), χ = $(χ)")
 end
 function plot_imaginary_frac(fig, ax; ρs = 0.4:0.05:1.0 ,xs = collect(0.4:0.001:1.0), ys =collect(0.0:0.5:100.0), xtic = 0.4:0.2:1, ytic = 0:10:100, axlim = [0.4, 1., 0., 100.], param = param, χ = 0.5 )
-    @unpack Dθ, Dx,ρp = param
+    @unpack Dθ, Dx, ρp = param
 
     n = length(xs)
     m = length(ys)
@@ -270,6 +271,14 @@ function plot_imaginary_frac(fig, ax; ρs = 0.4:0.05:1.0 ,xs = collect(0.4:0.001
     ax.axis(axlim)
     ax.set_xlabel("ρ")
     ax.set_ylabel("Pe")
-    ax.set_title("Dθ= $(Dθ), χ = $(χ)")
+    ax.set_title("ℓ = $(1/Dθ), χ = $(χ)")
 end
-
+#
+function pde_density_hist(fig::Figure, ax::PyObject, param::Dict{String,Any}, fa, fp; bins = 3)
+    @unpack Nx, Nθ = param
+    edges = collect((-1/(2*bins)):(1/(bins)):(1+1/(2*bins)))
+    ρ = fp + sum(fa; dims =3)[:,:,1].*(2*π/Nθ)
+    h = reshape(ρ, Nx*Nx)
+    ax.hist(h; bins = edges, histtype = "step", density = true)
+    ax.xaxis.set_ticks(0:0.25:1)
+end

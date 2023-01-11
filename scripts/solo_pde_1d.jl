@@ -108,10 +108,10 @@ i = 1
 @unpack T, save_interval = param
 t_saves, fa_saves, fp_saves = load_pdes(param,T; save_interval = save_interval)
 
-fa = fp_saves[i]
+fa = fa_saves[i]
 fig, ax = PyPlot.subplots(figsize =(10, 10))
     ax.plot(fa)
-    i+=1
+    i+=10
 display(fig)
 
 

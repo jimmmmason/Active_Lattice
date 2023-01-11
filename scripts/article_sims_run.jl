@@ -2,6 +2,7 @@ cd("/home/jm2386/Active_Lattice/")
 using DrWatson
 @quickactivate "Active_Lattice"
 include("/home/jm2386/Active_Lattice/src/article_src.jl")
+#
 @everywhere include("/home/jm2386/Active_Lattice/src/article_src.jl")
 ###
 
@@ -27,11 +28,11 @@ for ρ in (-collect(0.0:0.01:0.05).+root), Pe in [20.], Dθ in [100.]
                 #
                 push!(params,param)
 end
-# 
+#
 T  = 2.0
         χ  = 0.75
         ρ  = 0.8
-        Pe = 20.
+        Pe = 40.
         Dθ = 100.
         name = "article_sim"
 param = sim_param_fraction(; name = name, 
@@ -39,6 +40,40 @@ param = sim_param_fraction(; name = name,
         Dθ = Dθ, L = 128, Δt = 0.001
 )
 push!(params,param)
+# attempt #2 
+# lower Dθ as to not break jump rate 
+# for Dθ = 4. , χ = 0.5 
+# minimium of stab -> ρ = 0.92 , Pe = 17.546606636771152
+# for Dθ = 4. , χ = 0.25 
+# minimium of stab -> ρ = 0.946 , Pe = 29.68393713002393
+params = []
+        pert = "rand"
+        T  = 2.0
+        L = 128
+χ = 0.5
+for ρ in [0.92], Pe in [15.,20.,25.], Dθ in [4.]
+        name = "article_sim"
+        local param
+                #
+                param = sim_param_fraction(; name = name, 
+                        ρ = ρ, Pe = Pe, χ = χ, T = T, 
+                        Dθ = Dθ, L = 128, Δt = 0.001
+                )
+                #
+                push!(params,param)
+end
+χ = 0.25
+for ρ in [0.946], Pe in [25.,30.,35.], Dθ in [4.]
+        name = "article_sim"
+        local param
+                #
+                param = sim_param_fraction(; name = name, 
+                        ρ = ρ, Pe = Pe, χ = χ, T = T, 
+                        Dθ = Dθ, L = 128, Δt = 0.001
+                )
+                #
+                push!(params,param)
+end
 #run sims
 pmap(run_sim, params; distributed = true, batch_size=1, on_error=nothing,)
 #make video

@@ -2,6 +2,7 @@ cd("/home/jm2386/Active_Lattice/")
 using DrWatson
 @quickactivate "Active_Lattice"
 include("/home/jm2386/Active_Lattice/src/article_src.jl")
+#
 @everywhere include("/home/jm2386/Active_Lattice/src/article_src.jl")
 ###
 
@@ -12,7 +13,7 @@ params = []
         pert = "n=1"
         T  = 1.0
         δ = 0.01
-for ρ in collect(0.4:0.01:0.95), χ in [0.25,0.5,0.75], Pe in collect(5.:5.:100.), Dθ in [100.]
+for ρ in collect(0.96:0.01:0.99), χ in [0.25,0.5,0.75], Pe in collect(5.:5.:100.), Dθ in [100.]
         local param
         #
         name = "article_stability_1d_δ=$(δ)"
@@ -34,7 +35,7 @@ pmap(perturb_pde_run_1d, params; distributed = true, batch_size=1, on_error=noth
 #travelling wave parameters
 params = []
         pert = "n=1"
-        T  = 1.0
+        T  = 2.0
         χ = 0.25
         using Roots
         f(x) = lin_stab_line_fraction(x,χ; Dx =1. ,Pe = 20., Dθ =100.,k=40 )
@@ -99,7 +100,7 @@ pert = "rand"
         T  = 2.0
         χ  = 0.75
         ρ  = 0.8
-        Pe = 20. 
+        Pe = 40. 
         Dθ = 100. 
         δ  = 1e-2
         Nx = 50
