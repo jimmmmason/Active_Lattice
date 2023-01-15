@@ -113,9 +113,22 @@ end
 function ap_MathieuMatrix(ρa,ρp,Dx,Pe,Dθ; k::Int64 = 10, ω = 2*π)
     ρ = ρa + ρp
     v0 = Pe*sqrt(Dθ)
+    #
+    γ = 0.1
     ds = self_diff(ρ)
     dp = self_diff_prime(ρ)
     DD = (1-ds)/ρ
+    #=
+    ds = self_diff(ρ)+γ
+    dp = self_diff_prime(ρ)
+    DD = (1+2*γ-ds)/ρ
+    =#
+    #=
+    # oiginal paramters: 
+    ds = self_diff(ρ)
+    dp = self_diff_prime(ρ)
+    DD = (1-ds)/ρ
+    =#
     s = DD - 1
     p = -Dx*ds*ω^2
     q = -v0*im*ω*ds

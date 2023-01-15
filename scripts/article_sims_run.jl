@@ -12,12 +12,12 @@ include("/home/jm2386/Active_Lattice/src/article_src.jl")
 params = []
         pert = "rand"
         T  = 2.0
-        χ = 0.25
+        χ = 1.0
         L = 128
-        using Roots
-        f(x) = lin_stab_line_fraction(x,χ; Dx =1. ,Pe = 20., Dθ =100.,k=40 )
-        root = find_zero(f, (0.6,  0.8))
-for ρ in (-collect(0.0:0.01:0.05).+root), Pe in [20.], Dθ in [100.]
+        #using Roots
+        #f(x) = lin_stab_line_fraction(x,χ; Dx =1. ,Pe = 20., Dθ =100.,k=40 )
+        #root = find_zero(f, (0.6,  0.8))
+for ρ in [0.7], Pe in [4.,6.,8.,10.,12.], Dθ in [4.]
         name = "article_sim"
         local param
                 #
@@ -70,6 +70,31 @@ for ρ in [0.946], Pe in [25.,30.,35.], Dθ in [4.]
                 param = sim_param_fraction(; name = name, 
                         ρ = ρ, Pe = Pe, χ = χ, T = T, 
                         Dθ = Dθ, L = 128, Δt = 0.001
+                )
+                #
+                push!(params,param)
+end
+#run sims
+pmap(run_sim, params; distributed = true, batch_size=1, on_error=nothing,)
+#make video
+pmap(make_sim_vid, params; distributed = true, batch_size=1, on_error=nothing,)
+#
+###
+# attempt #3
+# try extra mixing to encourage waves? 
+γ = 0.1
+χ = 0.5
+params = []
+        pert = "rand"
+        T  = 4.0
+        L = 128
+for ρ in [0.8], Pe in [5.,10.,20.], Dθ in [4.]
+        name = "article_sim_γ=$(γ))"
+        local param
+                #
+                param = sim_param_fraction(; name = name, 
+                        ρ = ρ, Pe = Pe, χ = χ, γ= γ, Dθ = Dθ,
+                        T = T, L = 128, Δt = 0.001, 
                 )
                 #
                 push!(params,param)

@@ -36,18 +36,41 @@ function sim_param_fraction(;  name = "test", D =1. , Pe =1. ,ρ = 0.5, χ = 0.5
             return -1
         end
     end
-    function rates(n,m,i)
-        E = [[1,0],[0,1],[0,-1],[-1,0],]
-        if m[1]>0.
-            return 0.
-        elseif n[1]==0.
-            return 0.
-        elseif n[1]==2.
-            return L^2*D
-        else
-            return L^2*D + L*λ*E[i]⋅[cos(n[2]),sin(n[2])] 
+    rates(n,m,i) = 0.
+    if γ>0.
+        function rates(n,m,i)
+            E = [[1,0],[0,1],[0,-1],[-1,0],]
+            rate = 0.
+            if n[1]==0.
+                rate = 0.
+            elseif n[1]==2.
+                rate = L^2*D
+            elseif n[1]==1.
+                rate = L^2*D + L*λ*E[i]⋅[cos(n[2]),sin(n[2])] 
+            end
+            if m[1]>0.
+                return rate*γ
+            else
+                return rate
+            end
+        end
+    else
+        function rates(n,m,i)
+            E = [[1,0],[0,1],[0,-1],[-1,0],]
+            if m[1]>0.
+                return 0.
+            else
+                if n[1]==0.
+                    return 0.
+                elseif n[1]==2.
+                    return L^2*D
+                elseif n[1]==1.
+                    return L^2*D + L*λ*E[i]⋅[cos(n[2]),sin(n[2])] 
+                end
+            end
         end
     end
+
     @pack! param = name, L, D, λ, γ, ρa, ρp, Δt, E, site_distribution, angles, rates, Dθ, T, POSITIONS
     return param
 end
@@ -168,7 +191,7 @@ function find_stab_data(;stabdata = Dict{String,Any}(), ρs = 0.4:0.05:1.0, Pes 
         wsave(filename,stabdata)
     end
 end
-function plot_stab_frac(fig, ax, stabdata; ρs = 0.4:0.05:1.0 ,xs = collect(0.4:0.001:1.0), xtic = 0.4:0.2:1, ytic = 0:10:100, axlim = [0.4, 1., 0., 100.], param = param, χ = 0.5 )
+function plot_stab_frac(fig, ax, stabdata; ρs = 0.4:0.05:1.0 ,xs = collect(0.4:0.001:1.0), xtic = 0.4:0.2:1, ytic = 0:10:100, axlim = [0.4, 1., 0., 40.], param = param, χ = 0.5 )
     @unpack Dθ, Dx,ρp = param
     stable_points = []
     unstable_points = []

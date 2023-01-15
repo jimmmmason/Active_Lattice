@@ -211,7 +211,7 @@ function run_sim(param)
             s = T
         end
         s+= 50*Δt
-    end 
+    end
     run_model_until!(param, model, T; save_on = true);
     println("success: γ = $(param["γ"]), ρ = $(param["ρa"]), λ = $(param["λ"])")
 end

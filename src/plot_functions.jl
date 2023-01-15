@@ -296,8 +296,10 @@ end
 
 
 function animate_phase_pdes_1d(param,t_saves,fa_saves,fp_saves; frames = 99)
-    @unpack name, λ, ρa, ρp, Nx, Nθ, δt = param
+    @unpack name, λ, ρa, ρp, Nx, Nθ, δt, Dθ, = param
     fig, axs = plt.subplots(2, 2, figsize=(12,8))
+    fig.suptitle("ℓ= $(1/sqrt(Dθ)), χ = $(χ), ρ = $(round(ρa+ρp;digits = 3))", fontsize = 20, y = 1.05)
+    fig.tight_layout()
     function makeframe(i)
         clf()
         ax1 = fig.add_subplot(321)

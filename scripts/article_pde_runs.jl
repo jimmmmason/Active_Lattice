@@ -13,7 +13,7 @@ params = []
         pert = "n=1"
         T  = 1.0
         δ = 0.01
-for ρ in collect(0.96:0.01:0.99), χ in [0.25,0.5,0.75], Pe in collect(5.:5.:100.), Dθ in [100.]
+for ρ in append!(collect(0.425:0.025:0.9),collect(0.95:0.001:0.999)), χ in [1.0], Pe in collect(2.:2.0:40.), Dθ in [4.]
         local param
         #
         name = "article_stability_1d_δ=$(δ)"

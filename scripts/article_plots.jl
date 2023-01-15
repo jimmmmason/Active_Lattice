@@ -23,21 +23,22 @@ PyPlot.close("all")
 
 
 ###
-#stability plots
+# WARNING CHECK THE STAB SOLVER HAS BEEN RESET!!! 
+#stability plots 
 #parameters
-χ = 0.5
+χ = 1.0
 params = []
     pert = "n=1"
     T  = 1.0
     δ = 0.01
     Nx= 50
     Nθ= 20
-    Dθ= 1.
+    Dθ= 4.
     name = "article_stability_1d_δ=$(δ)"
-    ρs = 0.01:0.01:0.99
-    Pes = 5.:5.:100.
+    ρs = append!(collect(0.45:0.05:0.9),collect(0.95:0.005:0.995))
+    Pes = 2.:2.:40.
     stab_type = "full"
-for ρ in [0.5], χ in [0.25,0.5,0.75], Pe in [100.]
+for ρ in [0.5], χ in [1.0], Pe in [4.]
         local param
         #
         name = "article_stability_1d_δ=$(δ)"
@@ -50,25 +51,41 @@ for ρ in [0.5], χ in [0.25,0.5,0.75], Pe in [100.]
         #
         push!(params,param)
     end
-    param = params[3]
-#compute stability
+    param = params[1]
+#compute stability ,0.25,0.5,0.75
 for param in params
     stabdata = find_stab_data(;stabdata = Dict{String,Any}(), ρs = ρs, Pes = Pes,  param = param, save_on = true, t_end = 1.0, stab_type = "full")
 end
+# WARNING CHECK THE STAB SOLVER HAS BEEN RESET!!! 
 #stab plot
-χ = 0.5
+ρs = collect(0.45:0.05:1.0)
+χ = 1.0
 xs = append!(append!(collect(0.401:0.001:0.99),collect(0.99:0.0001:0.9999)),collect(0.4:0.00001:0.401))
 fig, ax = fig, ax = PyPlot.subplots(figsize =(10, 10))
     filename = "/store/DAMTP/jm2386/Active_Lattice/data/pde_pro/$(name)/stability_type=$(stab_type)_Nx=$(Nx)_Nθ=$(Nθ)_Dθ=$(Dθ)_χ=$(χ).jld2"
     stabdata = wload(filename)
-    plot_stab_frac(fig, ax, stabdata; xs=xs, ρs = ρs, param = param, χ = χ)
+    plot_stab_frac(fig, ax, stabdata; xs=xs, ρs = ρs, xtic = 0.4:0.1:1.0,  axlim = [minimum(ρs), maximum(ρs), minimum(Pes), maximum(Pes)], param = param, χ = χ)
 display(fig)
     pathname = "/store/DAMTP/jm2386/Active_Lattice/plots/article_stabiliy/$(name)";
     mkpath(pathname)
     filename = "/store/DAMTP/jm2386/Active_Lattice/plots/article_stabiliy/$(name)/χ=$(χ)_Nx=$(Nx)_Nθ=$(Nθ).pdf";
     PyPlot.savefig(filename,dpi = 100, format = "pdf")
+#stab plot inset
+ρs = collect(0.95:0.001:1.0)
+χ = 1.0
+xs = append!(append!(collect(0.401:0.001:0.99),collect(0.99:0.0001:0.9999)),collect(0.4:0.00001:0.401))
+fig, ax = fig, ax = PyPlot.subplots(figsize =(10, 10))
+    filename = "/store/DAMTP/jm2386/Active_Lattice/data/pde_pro/$(name)/stability_type=$(stab_type)_Nx=$(Nx)_Nθ=$(Nθ)_Dθ=$(Dθ)_χ=$(χ).jld2"
+    stabdata = wload(filename)
+    plot_stab_frac(fig, ax, stabdata; xs=xs, ρs = ρs, xtic = 0.95:0.01:1.0, axlim = [minimum(ρs), maximum(ρs), minimum(Pes), maximum(Pes)],param = param, χ = χ)
+display(fig)
+    pathname = "/store/DAMTP/jm2386/Active_Lattice/plots/article_stabiliy_inset/$(name)";
+    mkpath(pathname)
+    filename = "/store/DAMTP/jm2386/Active_Lattice/plots/article_stabiliy_inset/$(name)/χ=$(χ)_Nx=$(Nx)_Nθ=$(Nθ).pdf";
+    PyPlot.savefig(filename,dpi = 100, format = "pdf")
+# WARNING CHECK THE STAB SOLVER HAS BEEN RESET!!! 
 #imag plot
-χ = 0.75
+χ = 1.0
 Dθ= 4.0
     ρ = 0.5
     Pe = 100.
@@ -77,9 +94,7 @@ Dθ= 4.0
     δ = 0.01
     Nx= 50
     Nθ= 20
-    name = "article_stability_1d_δ=$(δ)"
-    ρs = 0.01:0.01:0.99
-    Pes = 5.:5.:100.
+    name = "article_stability_1d_extra_stirring"
     stab_type = "full"
     param = pde_param_fraction(; name = name, 
                         ρ = ρ, Pe = Pe, χ = χ, T = T, 
@@ -88,12 +103,14 @@ Dθ= 4.0
                         pert = pert, k =40, δ = δ,
     )
 fig, ax = fig, ax = PyPlot.subplots(figsize =(10, 10))
-    plot_imaginary_frac(fig, ax; param = param, χ = χ)
+    plot_imaginary_frac(fig, ax; xs = collect(0.4:0.01:1.0), ys =collect(0.0:1.0:100.0),param = param, χ = χ, axlim = [0.4, 1., 0., 100.])
 display(fig)
     pathname = "/store/DAMTP/jm2386/Active_Lattice/plots/article_imaginary/$(name)";
     mkpath(pathname)
     filename = "/store/DAMTP/jm2386/Active_Lattice/plots/article_imaginary/$(name)/χ=$(χ)_Dθ=$(Dθ)_Nx=$(Nx)_Nθ=$(Nθ).pdf";
     PyPlot.savefig(filename,dpi = 100, format = "pdf")
+PyPlot.close("all")
+# WARNING CHECK THE STAB SOLVER HAS BEEN RESET!!!
 ###
 
 
@@ -142,7 +159,7 @@ pert = "n=1"
     using Roots
     f(x) = lin_stab_line_fraction(x,χ; Dx =1. ,Pe = 20., Dθ =100.,k=40 )
     root = find_zero(f, (0.6,  0.8))
-    ρ = -0.04+root
+    ρ = -0.03+root
     Pe = 20. 
     Dθ = 100.
     δ  = 1e-6
@@ -163,25 +180,6 @@ fig, axs = plt.subplots(3, 2, figsize=(12,12))
 i =27
 test_vid_phase_pde_plot_1d(fig, axs, param, t_saves, fa_saves, fp_saves, i)
 display(fig)
-
-
-minimum(ρa_saves[270])-ρa
-minimum((minimum.(ρa_saves).-ρa))
-
-minimum((minimum(ρa_saves[1]).-ρa))
-
-spatial_fourier_mode2(ρ; Nx = Nx)
-
-
-spatial_fourier_mode2s(ρa_saves,ρa_saves; Nx = Nx)
-
-
-
-mean(ρp_saves[1])-ρp
-
-maximum(maximum(ρa_saves))-ρa
-minimum(minimum(ρa_saves))-ρa
-
 
 animate_phase_pdes_1d(param,t_saves,fa_saves,fp_saves; frames = 99)
 ###
