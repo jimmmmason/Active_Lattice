@@ -112,9 +112,15 @@ end
 
 ##
 
-function self_diff(ρ::Float64)
+
+function self_diff(ρ::Float64;logtol = 1e-10, γ = 0.0)
     α::Float64= π/2 -1;
-    return ( 1-ρ).*( α*(2*α-1)/(2*α+1)*ρ^2 - α*ρ +1)
+    if ρ ≤  0.
+        ρ = logtol
+    elseif ρ>1.
+        ρ = 1.
+    end
+    return ( 1-ρ).*( α*(2*α-1)/(2*α+1)*ρ^2 - α*ρ +1)+γ
 end
 
 function self_diff_prime(ρ::Float64)
@@ -131,33 +137,48 @@ function mag_1d(f::Array{Float64,2}; Nθ = 50, Nx =100)
     return 2*π*m/Nθ
 end
 
-function coeff_s(rho::Float64,ds::Float64)
-    return (rho>0 ? (1-rho-ds)/(rho*ds) : 0)
-end
-
-function coeff_mag_s_1d(f::Array{Float64,2},ρ::Array{Float64,1}; Nθ::Int64 = 100,  Nx::Int64 = 100)
+function coeff_mag_s_1d(f::Array{Float64,2},ρ::Array{Float64,1}; Nθ::Int64 = 100,  Nx::Int64 = 100,γ::Float64 = 0.0)
     m    ::Array{Float64,1} = mag_1d(f; Nθ=Nθ, Nx=Nx );
-    ds   ::Array{Float64,1} = self_diff.(ρ);
+    ds   ::Array{Float64,1} = self_diff.(ρ; γ=γ);
     s    ::Array{Float64,1} = coeff_s.(ρ,ds);
     mag_s::Array{Float64,1} = s.*m
     return mag_s
 end
 #functon p is labelled W in the pdf
-function p(x::Float64)
-    if x <0.
-        x = 0.
-    elseif x>1.
-        x = 1.
+using Polynomials
+function p(x::Float64;logtol = 1e-10, γ =0.)
+    if γ ==0.
+        if x <0.
+            x = logtol
+        elseif x ≥ 1.
+            x = 1. -logtol
+        end
+        c2::Float64 = sqrt( (π-2)/( (π-1)*(26+(-11+π)*π))  )
+        c3::Float64 = -(-4+π)sqrt( 1+8*(π-3)/( 26+(-11+π)*π)  )/2
+        p1::Float64 = (1-π+2*(-3+π)*x)
+        p2::Float64 = -2  +2*π  -(-2+π)*(-1+π)*x  +(-3+π)*(-2+π)*x^2
+        return c3*log(-1-c2*p1)  -c3*log(1-c2*p1)  +(1 -π)*log(1-x)   + 0.5*(-2+π)*log(p2)
+    else
+        if x <0.
+            x = logtol
+        elseif x ≥ 1.
+            x = 1. -logtol
+        end
+        a::Float64 = π/2 -1
+        coeff =[-1-2*a-γ-2*a*γ, 1+3*a+2*a^2,-4*a^2 ,-a+2*a^2];
+        rts::Vector{ComplexF64}= roots(Polynomial(coeff))
+        w = -(1/(1 + γ))*γ*log(x)
+        for r in rts
+            denom = (1 + 3*a + 2 *a^2)+ (- 8* a^2)*r +(- 3 *a  + 6 *a^2 )*r^2
+            neum = (1 + 3*a + 2a^2 )+(-4*a^2 )*r +(-a + 2*a^2)*r^2
+            w += -(1/(1 + γ))*log(complex(x-r))*neum/denom
+        end
+        return real(w)
     end
-    c2::Float64 = sqrt( (π-2)/( (π-1)*(26+(-11+π)*π))  )
-    c3::Float64 = -(-4+π)sqrt( 1+8*(π-3)/( 26+(-11+π)*π)  )/2
-    p1::Float64 = (1-π+2*(-3+π)*x)
-    p2::Float64 = -2  +2*π  -(-2+π)*(-1+π)*x  +(-3+π)*(-2+π)*x^2
-    return c3*log(-1-c2*p1)  -c3*log(1-c2*p1)  +(1 -π)*log(1-x)   + 0.5*(-2+π)*log(p2)
 end
 
-function mob_1d(fa::Array{Float64,2}, fp::Array{Float64,1}, ρ::Array{Float64,1})
-    ds::Array{Float64,1} = self_diff.(ρ)
+function mob_1d(fa::Array{Float64,2}, fp::Array{Float64,1}, ρ::Array{Float64,1}; γ::Float64 =0.)
+    ds::Array{Float64,1} = self_diff.(ρ; γ = γ )
     return fa.*ds, fp.*ds, fa
 end
 
@@ -167,17 +188,17 @@ end
 
 ##
 
-function U_velocities_1d(fa::Array{Float64,2}, fp::Array{Float64,1}, ρ::Array{Float64,1}; Nx::Int64 =100, Nθ::Int64 =100, λ::Float64 = 10.)
+function U_velocities_1d(fa::Array{Float64,2}, fp::Array{Float64,1}, ρ::Array{Float64,1}; Nx::Int64 =100, Nθ::Int64 =100, λ::Float64 = 10., γ::Float64=0.)
     logtol::Float64 = log(1e-10);
 
     eθ:: Array{Float64,2} = reshape(cos.((1:Nθ)*2π/Nθ),1,Nθ)
 
     logmfa::Array{Float64,2} = map(x -> (x>0 ? log(x) : logtol), fa);
     logmfp::Array{Float64,1} = map(x -> (x>0 ? log(x) : logtol), fp);
-    p_rho ::Array{Float64,1} = p.(ρ) #functon p is labelled W in the pdf
+    p_rho ::Array{Float64,1} = p.(ρ;γ=γ) #functon p is labelled W in the pdf
 
-    Ua::Array{Float64,2}  = -midpoint_bond_diff_θ_1d(logmfa .+ p_rho; Nx=Nx, Nθ=Nθ).+ λ*midpoint_bond_av_1d(coeff_mag_s_1d(fa,ρ; Nθ=Nθ, Nx=Nx ); Nx =Nx ) .+ λ*eθ 
-    Up::Array{Float64,1}  = -midpoint_bond_diff_1d(  logmfp  + p_rho; Nx=Nx       ) + λ*midpoint_bond_av_1d(coeff_mag_s_1d(fa,ρ; Nθ=Nθ, Nx=Nx ); Nx =Nx )
+    Ua::Array{Float64,2}  = -midpoint_bond_diff_θ_1d(logmfa .+ p_rho; Nx=Nx, Nθ=Nθ).+ λ*midpoint_bond_av_1d(coeff_mag_s_1d(fa,ρ; Nθ=Nθ, Nx=Nx,γ=γ ); Nx =Nx ) .+ λ*eθ 
+    Up::Array{Float64,1}  = -midpoint_bond_diff_1d(  logmfp  + p_rho; Nx=Nx       ) + λ*midpoint_bond_av_1d(coeff_mag_s_1d(fa,ρ; Nθ=Nθ, Nx=Nx,γ=γ ); Nx =Nx )
     Uθ::Array{Float64,2}  = -midpoint_Θ_diff_1d(fa; Nx=Nx, Nθ = Nθ)
 
     return Ua, Up, Uθ
@@ -205,11 +226,11 @@ end
 
 ##
 
-function time_stepper_1d(fa::Array{Float64,2}, fp::Array{Float64,1}, δt::Float64; Nx::Int64 =100, Nθ::Int64 =100, λ::Float64 = 10., Dθ::Float64 = 10.)
+function time_stepper_1d(fa::Array{Float64,2}, fp::Array{Float64,1}, δt::Float64; Nx::Int64 =100, Nθ::Int64 =100, λ::Float64 = 10., Dθ::Float64 = 10.,γ::Float64=0.)
     ρ::Array{Float64,1} = fp + sum(fa; dims =2)[:,1].*(2*π/Nθ)
     
-    Ua::Array{Float64,2},   Up::Array{Float64,1},   Uθ::Array{Float64,2}   = U_velocities_1d(fa,fp,ρ; Nx=Nx, Nθ=Nθ, λ=λ)
-    moba::Array{Float64,2}, mobp::Array{Float64,1}, mobθ::Array{Float64,2} = mob_1d(fa,fp,ρ)
+    Ua::Array{Float64,2},   Up::Array{Float64,1},   Uθ::Array{Float64,2}   = U_velocities_1d(fa,fp,ρ; Nx=Nx, Nθ=Nθ, λ=λ,γ=γ)
+    moba::Array{Float64,2}, mobp::Array{Float64,1}, mobθ::Array{Float64,2} = mob_1d(fa,fp,ρ;γ=γ)
     Fa::Array{Float64,2},   Fp::Array{Float64,1},   Fθ::Array{Float64,2}   = F_fluxes_1d(Ua, Up, Uθ, moba, mobp, mobθ; Nx=Nx, Nθ=Nθ)
     
     a::Float64 = maximum(abs.(Ua));
@@ -226,9 +247,9 @@ function time_stepper_1d(fa::Array{Float64,2}, fp::Array{Float64,1}, δt::Float6
 end
 
 function pde_stepper_1d!(param::Dict{String,Any}, density::Dict{String,Any})
-    @unpack δt, Nx, Nθ, Dθ, λ = param
+    @unpack δt, Nx, Nθ, Dθ, λ,γ = param
     @unpack fa, fp, t = density
-    fa, fp , dt = time_stepper_1d(fa, fp, δt; Nx=Nx, Nθ=Nθ, λ=λ, Dθ=Dθ)
+    fa, fp , dt = time_stepper_1d(fa, fp, δt; Nx=Nx, Nθ=Nθ, λ=λ, Dθ=Dθ,γ=γ)
     t::Float64 += dt
 
     @pack! density = fa, fp, t
@@ -282,7 +303,7 @@ function run_pde_until_1d!(param::Dict{String,Any},density::Dict{String,Any},T; 
 end
 
 function perturb_pde_1d!(param::Dict{String,Any}, density::Dict{String,Any}; δ = 0.01, pert = "n=2")
-    @unpack Nx, S, ρa, ρp, λ, Dθ, Nx, Nθ,Dx,Pe,Dθ,k = param
+    @unpack Nx, S, ρa, ρp, λ, Dθ, Nx, Nθ,Dx,Pe,Dθ,k, γ = param
     @unpack fa, fp = density
     ρ = ρa + ρp
     if ρ >0.9
@@ -290,30 +311,18 @@ function perturb_pde_1d!(param::Dict{String,Any}, density::Dict{String,Any}; δ 
     end
     #from stability: 
     if pert == "n=1"
-        if ρp ==0.
-            k = 20
             K = collect(0:1:(k-1))
-            ω = 2*π
-            q,m1,m2,γ = mstabparams_lite(ρa,ρ,Dx,Pe,Dθ)
-            matrix = MathieuMatrix(q,m1,m2; k=k);
-            a, A = MathieuEigen(matrix, γ);
-            B = 0.
-            Pa = (x,θ) -> real.( dot(A[:,1],cos.(θ*K*(2*π/Nθ)))*exp(im*x*ω/Nx) )
-            Pp = (x) -> B*cos(x*ω/Nx);
-        else
-            K = collect(0:1:(k-1))
-            matrix = ap_MathieuMatrix(ρa,ρp,Dx,Pe,Dθ; k=k)
+            matrix = ap_MathieuMatrix(ρa,ρp,Dx,Pe,Dθ; k=k, γ= γ)
             ω = 2*π
             a, A = ap_MathieuEigen(matrix)
-            Pa = (x,θ) -> real.( dot(A[2:1:(k+1),k+1],cos.(θ*K*(2*π/Nθ)))*exp(im*x*ω/Nx) )
-            Pp = (x) -> real.(A[1,k+1]*exp(im*x*ω/Nx));
-        end
+            Pa = (x,θ) -> real.( dot(A[2:1:(k+1),k+1],cos.(θ*K*(2*π/Nθ)))*exp(-im*x*ω/Nx) )
+            Pp = (x) -> real.(A[1,k+1]*exp(-im*x*ω/Nx));
     end
     if pert == "rand"
         Pa = (x,θ) -> δ*ρa*(( rand() - 0.5 )/(ρa+0.01))/(2*π);
         Pp = (x) -> δ*ρp*( rand() - 0.5 )/(ρp+0.01);
     end
-    # 
+    #
     perta = zeros(Nx,Nθ)
     pertp = zeros(Nx)
     for x₁ in 1:Nx, θ in S

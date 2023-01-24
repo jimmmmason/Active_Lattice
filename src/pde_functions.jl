@@ -136,14 +136,14 @@ end
 
 ##
 
-function self_diff(ρ::Float64;logtol = 1e-10)
+function self_diff(ρ::Float64;logtol = 1e-10, γ = 0.0)
     α::Float64= π/2 -1;
     if ρ ≤  0.
         ρ = logtol
     elseif ρ>1.
         ρ = 1.
     end
-    return ( 1-ρ).*( α*(2*α-1)/(2*α+1)*ρ^2 - α*ρ +1)
+    return ( 1-ρ).*( α*(2*α-1)/(2*α+1)*ρ^2 - α*ρ +1)+γ
 end
 
 function self_diff_prime(ρ::Float64;logtol = 1e-10)
@@ -169,14 +169,15 @@ function coeff_s(rho::Float64,ds::Float64)
     return ((rho*ds)>0 ? (1-rho-ds)/(rho*ds) : 0)
 end
 
-function coeff_mag_s(f::Array{Float64,3},ρ::Array{Float64,2}; Nθ::Int64 = 100,  Nx::Int64 = 100)
+function coeff_mag_s(f::Array{Float64,3},ρ::Array{Float64,2}; Nθ::Int64 = 100,  Nx::Int64 = 100,γ::Float64 = 0.0)
     m    ::Array{Float64,3} = mag(f; Nθ=Nθ, Nx=Nx );
-    ds   ::Array{Float64,2} = self_diff.(ρ);
+    ds   ::Array{Float64,2} = self_diff.(ρ; γ=γ);
     s    ::Array{Float64,3} = reshape(coeff_s.(ρ,ds),1,Nx,Nx);
     mag_s::Array{Float64,3} = s.*m
     return mag_s
 end
 #functon p is labelled W in the pdf
+#=
 function p(x::Float64; logtol = 1e-10)
     if x <0.
         x = logtol
@@ -189,9 +190,40 @@ function p(x::Float64; logtol = 1e-10)
     p2::Float64 = -2  +2*π  -(-2+π)*(-1+π)*x  +(-3+π)*(-2+π)*x^2
     return c3*log(abs(-1-c2*p1))  -c3*log(abs(1-c2*p1))  +(1 -π)*log(1-x)   + 0.5*(-2+π)*log(abs(p2))
 end
+=#
+function p(x::Float64;logtol = 1e-10, γ =0.)
+    if γ ==0.
+        if x <0.
+            x = logtol
+        elseif x ≥ 1.
+            x = 1. -logtol
+        end
+        c2::Float64 = sqrt( (π-2)/( (π-1)*(26+(-11+π)*π))  )
+        c3::Float64 = -(-4+π)sqrt( 1+8*(π-3)/( 26+(-11+π)*π)  )/2
+        p1::Float64 = (1-π+2*(-3+π)*x)
+        p2::Float64 = -2  +2*π  -(-2+π)*(-1+π)*x  +(-3+π)*(-2+π)*x^2
+        return c3*log(-1-c2*p1)  -c3*log(1-c2*p1)  +(1 -π)*log(1-x)   + 0.5*(-2+π)*log(p2)
+    else
+        if x <0.
+            x = logtol
+        elseif x ≥ 1.
+            x = 1. -logtol
+        end
+        a::Float64 = π/2 -1
+        coeff =[-1-2*a-γ-2*a*γ, 1+3*a+2*a^2,-4*a^2 ,-a+2*a^2];
+        rts::Vector{ComplexF64}= roots(Polynomial(coeff))
+        w = -(1/(1 + γ))*γ*log(x)
+        for r in rts
+            denom = (1 + 3*a + 2 *a^2)+ (- 8* a^2)*r +(- 3 *a  + 6 *a^2 )*r^2
+            neum = (1 + 3*a + 2a^2 )+(-4*a^2 )*r +(-a + 2*a^2)*r^2
+            w += -(1/(1 + γ))*log(complex(x-r))*neum/denom
+        end
+        return real(w)
+    end
+end
 
-function mob(fa::Array{Float64,3}, fp::Array{Float64,2}, ρ::Array{Float64,2})
-    ds::Array{Float64,2} = self_diff.(ρ)
+function mob(fa::Array{Float64,3}, fp::Array{Float64,2}, ρ::Array{Float64,2}; γ=0.)
+    ds::Array{Float64,2} = self_diff.(ρ;γ=γ)
     return fa.*ds, fp.*ds, fa
 end
 

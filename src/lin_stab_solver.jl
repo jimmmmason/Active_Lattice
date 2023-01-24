@@ -110,12 +110,11 @@ function ap_mstabparams_lite(ρa,ρp,Dx,Pe,Dθ)
 end
 =#
 
-function ap_MathieuMatrix(ρa,ρp,Dx,Pe,Dθ; k::Int64 = 10, ω = 2*π)
+function ap_MathieuMatrix(ρa,ρp,Dx,Pe,Dθ; k::Int64 = 10, ω = 2*π,γ= 0.0)
     ρ = ρa + ρp
     v0 = Pe*sqrt(Dθ)
     #
-    γ = 0.1
-    ds = self_diff(ρ)
+    ds = self_diff(ρ;γ= γ) 
     dp = self_diff_prime(ρ)
     DD = (1-ds)/ρ
     #=
@@ -179,6 +178,19 @@ end
 Pe = 3.
 Dθ = 100.
 Dx = 1.
+
+
+
+@unpack Dθ, Dx, ρp, ρa, Pe = param
+k = 10
+matrix = ap_MathieuMatrix(ρa,ρp,Dx,Pe,Dθ; k = k, ω = -2*π);
+a, A = ap_MathieuEigen(matrix)
+hcat(A[:,k+1],A[:,k])
+
+hcat(A[:,k+1]/A[2,k+1],A[:,k]/A[2,k])
+
+
+
 #Mparams = stabparams(param)
 
 ω2 = (2 * pi)^2

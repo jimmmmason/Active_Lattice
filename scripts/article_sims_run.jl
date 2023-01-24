@@ -11,13 +11,13 @@ include("/home/jm2386/Active_Lattice/src/article_src.jl")
 #generic parameters close to stable
 params = []
         pert = "rand"
-        T  = 2.0
+        T  = 4.0
         χ = 1.0
         L = 128
         #using Roots
         #f(x) = lin_stab_line_fraction(x,χ; Dx =1. ,Pe = 20., Dθ =100.,k=40 )
         #root = find_zero(f, (0.6,  0.8))
-for ρ in [0.7], Pe in [4.,6.,8.,10.,12.], Dθ in [4.]
+for ρ in [0.7], Pe in [24.], Dθ in [4.]
         name = "article_sim"
         local param
                 #
@@ -88,7 +88,7 @@ params = []
         pert = "rand"
         T  = 4.0
         L = 128
-for ρ in [0.8], Pe in [5.,10.,20.], Dθ in [4.]
+for ρ in [0.8], Pe in [250.], Dθ in [4.]
         name = "article_sim_γ=$(γ))"
         local param
                 #
@@ -104,4 +104,8 @@ pmap(run_sim, params; distributed = true, batch_size=1, on_error=nothing,)
 #make video
 pmap(make_sim_vid, params; distributed = true, batch_size=1, on_error=nothing,)
 #
+pmap(make_sim_vid_lite, params; distributed = true, batch_size=1, on_error=nothing,)
+#
+make_sim_vid_lite(param)
 ###
+param = params[2]

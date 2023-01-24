@@ -287,16 +287,17 @@ end
 
 # 1d wave plots 
 
-function make_phase_video_1d(param; frames = 100)
+function make_phase_video_1d(param; frames = 100, speed_factor = 0.1)
     @unpack T, save_interval = param
-    save_interval = 0.1*T/frames
+    save_interval = speed_factor*T/frames
     t_saves, fa_saves, fp_saves = load_pdes(param,T; save_interval = save_interval)
-    animate_phase_pdes_1d(param,t_saves,fa_saves,fp_saves; frames = frames-1)
+    frames = Int64(round(length(t_saves)*speed_factor))-1
+    animate_phase_pdes_1d(param,t_saves,fa_saves,fp_saves; frames = frames-1, speed_factor =speed_factor)
 end
 
 
-function animate_phase_pdes_1d(param,t_saves,fa_saves,fp_saves; frames = 99)
-    @unpack name, λ, ρa, ρp, Nx, Nθ, δt, Dθ, = param
+function animate_phase_pdes_1d(param,t_saves,fa_saves,fp_saves; frames = 99, speed_factor = 0.1)
+    @unpack name, λ, ρa, ρp, Nx, Nθ, δt, Dθ, χ, γ = param
     fig, axs = plt.subplots(2, 2, figsize=(12,8))
     fig.suptitle("ℓ= $(1/sqrt(Dθ)), χ = $(χ), ρ = $(round(ρa+ρp;digits = 3))", fontsize = 20, y = 1.05)
     fig.tight_layout()
@@ -309,37 +310,84 @@ function animate_phase_pdes_1d(param,t_saves,fa_saves,fp_saves; frames = 99)
         ax5 = fig.add_subplot(325)
         ax6 = fig.add_subplot(326)
         axs = ax1, ax2, ax3, ax4, ax5, ax6
-        test_vid_phase_pde_plot_1d(fig, axs, param, t_saves, fa_saves, fp_saves, i+1)
+        test_vid_phase_pde_plot_1d(fig, axs, param, t_saves, fa_saves, fp_saves, i+1; speed_factor = speed_factor)
         return fig
     end
-    interval = Int64(round(10000/frames))
+    interval = 5*Int64(round(10000/frames))
     myanim = anim.FuncAnimation(fig, makeframe, frames=frames, interval=interval)
     # Convert it to an MP4 movie file and saved on disk in this format.
-    T = t_saves[10*frames+10]
+    T = t_saves[Int64(round((frames+1)/speed_factor))]
     pathname = "/store/DAMTP/jm2386/Active_Lattice/plots/vids/pde_phase_vids/$(name)/active=$(ρa)_passive=$(ρp)_lamb=$(λ)";
     mkpath(pathname)
     filename = "/store/DAMTP/jm2386/Active_Lattice/plots/vids/pde_phase_vids/$(name)/active=$(ρa)_passive=$(ρp)_lamb=$(λ)/time=$(round(T; digits = 5))_Nx=$(Nx)_Nθ=$(Nθ)_active=$(ρa)_passive=$(ρp)_lamb=$(λ).mp4";
     myanim[:save](filename, bitrate=-1, dpi= 100, extra_args=["-vcodec", "libx264", "-pix_fmt", "yuv420p"])
 end 
 
-function test_vid_phase_pde_plot_1d(fig::Figure, axs, param::Dict{String,Any}, t_saves, fa_saves, fp_saves, i)
-    @unpack Nx, Nθ, ρa, ρp, χ = param
+function test_vid_phase_pde_plot_1d(fig::Figure, axs, param::Dict{String,Any}, t_saves, fa_saves, fp_saves, i; speed_factor = 0.1)
+    @unpack Nx, Nθ, ρa, ρp, χ, Dθ, Dx, k, γ = param
     ρa_saves, ρp_saves = spatial_densities(fa_saves, fp_saves; Nx= Nx, Nθ = Nθ)
     phasea_saves, phasep_saves = spatial_fourier_modes(ρa_saves, ρp_saves; Nx = Nx) 
     phase2a_saves, phase2p_saves = spatial_fourier_mode2s(ρa_saves, ρp_saves; Nx = Nx) 
 
-    axs[1].plot((1:Nx)/Nx,ρa_saves[10*i].-ρa, color = "red")
-    axs[1].plot((1:Nx)/Nx,ρp_saves[10*i].-ρp, color = "black")
+    j = Int64(round(i/speed_factor))
+
+    axs[1].plot((1:Nx)/Nx,ρa_saves[j].-ρa, color = "red")
+    axs[1].plot((1:Nx)/Nx,ρp_saves[j].-ρp, color = "black")
     #axs[1].xaxis.set_ticks(xtic)
     #axs[1].yaxis.set_ticks(ytic)
     #axs[1].axis(axlim)
     axs[1].axis([0., 1., minimum(minimum.(ρa_saves))-ρa,maximum(maximum.(ρa_saves))-ρa])
     axs[1].set_xlabel("x")
     axs[1].set_ylabel("ρₐ-ϕₐ,ρₚ-ϕₚ")
-    axs[1].set_title("t = $(round(t_saves[10*i]; digits = 3))")
+    axs[1].set_title("t = $(round(t_saves[j]; digits = 3))")
 
 
-    axs[2].plot((1:Nx)/Nx,mag_1d(fa_saves[10*i]; Nθ = Nθ), color = "red")
+    #=
+    K = collect(0:1:(k-1))
+    matrix = ap_MathieuMatrix(ρa,ρp,Dx,Pe,Dθ; k=k, γ= γ)
+    ω = 2*π
+    a, A = ap_MathieuEigen(matrix)
+    lin_fa = zeros(Nx, Nθ)
+    lin_fp = zeros(Nx)
+    a = a[k+1]
+    for x in 1:Nx, θ in 1:Nθ
+        lin_fa[x...,θ...] = real.( dot(A[2:1:(k+1),k+1],cos.(θ*K*(2*π/Nθ)))*exp(a*t_saves[j]+im*x*ω/Nx) )
+        lin_fp[x...] = real.(A[1,k+1]*exp(a*t_saves[j]+im*x*ω/Nx));
+    end
+    c = dist_from_unif_1d(param, lin_fa.+ρa/(2*π), lin_fp.+ρp)
+    lin_ρa = sum(lin_fa; dims =2)[:,1].*(2*π/Nθ)
+    axs[1].plot((1:Nx)/Nx,exp(real(a)*t_saves[j])*δ*lin_ρa/c, color = "green")
+    axs[1].plot((1:Nx)/Nx,exp(real(a))*t_saves[j]*δ*lin_fp/c, color = "blue")
+    
+    
+        K = collect(0:1:(k-1))
+        matrix = ap_MathieuMatrix(ρa,ρp,Dx,Pe,Dθ; k=k, γ= γ)
+        ω = 2*π
+        a, A = ap_MathieuEigen(matrix)
+        Pa = (x,θ) -> real.( dot(A[2:1:(k+1),k+1],cos.(θ*K*(2*π/Nθ)))*exp(a*t_saves[j]-im*x*ω/Nx) )
+        Pp = (x) -> real.(A[1,k+1]*exp(a*t_saves[j]-im*x*ω/Nx));
+        a = a[k]
+
+        perta = zeros(Nx,Nθ)
+        pertp = zeros(Nx)
+        for x₁ in 1:Nx, θ in 1:Nθ
+            perta[x₁, θ] = Pa(x₁, θ);
+        end
+        for x₁ in 1:Nx
+            pertp[x₁] = Pp(x₁);
+        end
+
+        c = dist_from_unif_1d(param, perta.+ρa/(2*π), pertp.+ρp)
+        lin_fa = δ*perta/c
+        lin_fp = δ*pertp/c
+        lin_ρa = sum(lin_fa; dims =2)[:,1].*(2*π/Nθ)
+
+
+        axs[1].plot((1:Nx)/Nx,exp(real(a)*t_saves[j])*lin_ρa, color = "pink")
+        axs[1].plot((1:Nx)/Nx,exp(real(a)*t_saves[j])*lin_fp, color = "blue")
+    =#
+
+    axs[2].plot((1:Nx)/Nx,mag_1d(fa_saves[j]; Nθ = Nθ), color = "red")
     #axs[1].xaxis.set_ticks(xtic)
     #axs[1].yaxis.set_ticks(ytic)
     #axs[1].axis(axlim)
@@ -356,8 +404,8 @@ function test_vid_phase_pde_plot_1d(fig::Figure, axs, param::Dict{String,Any}, t
     #ax.set_ylabel("Pe")
     axs[3].set_ylabel("1ˢᵗ mode amplitude")
     #axs[3].legend(loc = "upper right")
-    axs[3].scatter(t_saves[10*i],abs.(phasea_saves)[10*i],color = "red")
-    axs[3].scatter(t_saves[10*i],abs.(phasep_saves)[10*i],color = "black")
+    axs[3].scatter(t_saves[j],abs.(phasea_saves)[j],color = "red")
+    axs[3].scatter(t_saves[j],abs.(phasep_saves)[j],color = "black")
     #axs[3].set_aspect(maximum(t_saves)/maximum(abs.(phasea_saves)))
 
     axs[4].plot(t_saves, phase_args(angle.(phasea_saves)), color = "red")
@@ -367,8 +415,8 @@ function test_vid_phase_pde_plot_1d(fig::Figure, axs, param::Dict{String,Any}, t
     #axs[2].axis(axlim)
     axs[4].set_xlabel("t")
     axs[4].set_ylabel("1ˢᵗ mode phase")
-    axs[4].scatter(t_saves[10*i],phase_args(angle.(phasea_saves))[10*i],color = "red")
-    axs[4].scatter(t_saves[10*i],phase_args(angle.(phasep_saves))[10*i],color = "black")
+    axs[4].scatter(t_saves[j],phase_args(angle.(phasea_saves))[j],color = "red")
+    axs[4].scatter(t_saves[j],phase_args(angle.(phasep_saves))[j],color = "black")
     #axs[4].set_aspect(maximum(t_saves)/(maximum(phase_args(angle.(phasea_saves)))-minimum(phase_args(angle.(phasea_saves)))))
 
     axs[5].plot(t_saves, abs.(phase2a_saves), color = "red", label = "Active")
@@ -380,8 +428,8 @@ function test_vid_phase_pde_plot_1d(fig::Figure, axs, param::Dict{String,Any}, t
     #ax.set_ylabel("Pe")
     axs[5].set_ylabel("2ⁿᵈ mode amlitude")
     axs[5].legend(loc = "upper right")
-    axs[5].scatter(t_saves[10*i],abs.(phase2a_saves)[10*i],color = "red")
-    axs[5].scatter(t_saves[10*i],abs.(phase2p_saves)[10*i],color = "black")
+    axs[5].scatter(t_saves[j],abs.(phase2a_saves)[j],color = "red")
+    axs[5].scatter(t_saves[j],abs.(phase2p_saves)[j],color = "black")
     #axs[3].set_aspect(maximum(t_saves)/maximum(abs.(phasea_saves)))
 
     axs[6].plot(t_saves, phase_args(angle.(phase2a_saves)), color = "red")
@@ -391,8 +439,8 @@ function test_vid_phase_pde_plot_1d(fig::Figure, axs, param::Dict{String,Any}, t
     #axs[2].axis(axlim)
     axs[6].set_xlabel("t")
     axs[6].set_ylabel("2ⁿᵈ mode phase")
-    axs[6].scatter(t_saves[10*i],phase_args(angle.(phase2a_saves))[10*i],color = "red")
-    axs[6].scatter(t_saves[10*i],phase_args(angle.(phase2p_saves))[10*i],color = "black")
+    axs[6].scatter(t_saves[j],phase_args(angle.(phase2a_saves))[j],color = "red")
+    axs[6].scatter(t_saves[j],phase_args(angle.(phase2p_saves))[j],color = "black")
 
     fig.suptitle("ℓ= $(1/sqrt(Dθ)), χ = $(χ), ρ = $(round(ρa+ρp;digits = 3))", fontsize = 20, y = 1.05)
     fig.tight_layout()

@@ -9,7 +9,7 @@ include("/home/jm2386/Active_Lattice/src/pde_functions.jl")
 include("/home/jm2386/Active_Lattice/src/sim_functions.jl")
 include("/home/jm2386/Active_Lattice/src/lin_stab_solver.jl")
 ##
-function pde_param_fraction(; name = "test", D =1., Dx = 1., Pe =1., Dθ = 10, ρ= 0.5, χ = 1.0, Nx = 100, Nθ = 20, δt = 1e-5, T= 0.001, save_interval = 0.01, max_steps = 1e8, max_runs = 6, λ_step = 10., λmax = 100., λs = 20.:20.:100., pert = "n=1", δ = 0.01, k=20)
+function pde_param_fraction(; name = "test", D =1., Dx = 1., Pe =1., Dθ = 10, ρ= 0.5, χ = 1.0, Nx = 100, Nθ = 20, δt = 1e-5, T= 0.001, save_interval = 0.01, max_steps = 1e8, max_runs = 6, λ_step = 10., λmax = 100., λs = 20.:20.:100., pert = "n=1", δ = 0.01, k=20,γ = 0.0)
     Ω  = [[i,j] for i in 1:Nx for j in 1:Nx ] 
     S  = [ θ for θ in 1:Nθ]
     E = [[1,0],[0,1],[0,-1],[-1,0],]
@@ -18,14 +18,14 @@ function pde_param_fraction(; name = "test", D =1., Dx = 1., Pe =1., Dθ = 10, �
     ρp = (1-χ)*ρ
     ρa = χ*ρ
     param = Dict{String,Any}()
-    @pack! param = k, name, D, λ, ρa, ρp, δt, Nx, Nθ, S,  E, Dθ, T, save_interval, max_steps, max_runs, λ_step, λmax, λs, pert, δ, Pe, Dx, χ, ρ
+    @pack! param = k, name, D, λ, ρa, ρp, δt, Nx, Nθ, S,  E, Dθ, T, save_interval, max_steps, max_runs, λ_step, λmax, λs, pert, δ, Pe, Dx, χ, ρ, γ
     return param
 end
 function sim_param_fraction(;  name = "test", D =1. , Pe =1. ,ρ = 0.5, χ = 0.5, L=10, d=2, Δt = 0.01, Dθ =10., T=1.0, γ = 0.)
     param = Dict{String,Any}()
     ρa = χ*ρ
     ρp = (1-χ)*ρ
-    λ = Pe*sqrt(Dθ)
+    λ = Pe*sqrt(Dθ)/2 # see erignoux paper this lambda is half the pde lambda but gives same Pe in final model 
     E = [[1,0],[0,1],[0,-1],[-1,0],]
     site_distribution = fill([1-ρa-ρp, ρa, ρp],(L,L))
     POSITIONS = reshape(collect(1:(L^2*4)), (L,L,4))
@@ -272,7 +272,7 @@ function plot_imaginary_frac(fig, ax; ρs = 0.4:0.05:1.0 ,xs = collect(0.4:0.001
         try
             local f
             f(y) = lin_stab_line_fraction(x,χ; Dx =Dx ,Pe = y, Dθ = Dθ)
-            Pe = find_zero(f, (0.,  100.))
+            Pe = find_zero(f, (0.,  500.))
             push!(Y,Pe)
             push!(X,x)
         catch
@@ -289,12 +289,12 @@ function plot_imaginary_frac(fig, ax; ρs = 0.4:0.05:1.0 ,xs = collect(0.4:0.001
     ax.contourf(xs, ys, zs; levels = 200, norm = norm1, cmap = colmap )
     fig.colorbar(matplotlib.cm.ScalarMappable(norm=norm1, cmap = colmap), ax = ax, fraction = 0.0455)
 
-    ax.xaxis.set_ticks(xtic)
-    ax.yaxis.set_ticks(ytic)
+    #ax.xaxis.set_ticks(xtic)
+    #ax.yaxis.set_ticks(ytic)
     ax.axis(axlim)
     ax.set_xlabel("ρ")
     ax.set_ylabel("Pe")
-    ax.set_title("ℓ = $(1/Dθ), χ = $(χ)")
+    ax.set_title("ℓ = $(1/sqrt(Dθ)), χ = $(χ)")
 end
 #
 function pde_density_hist(fig::Figure, ax::PyObject, param::Dict{String,Any}, fa, fp; bins = 3)
@@ -303,5 +303,13 @@ function pde_density_hist(fig::Figure, ax::PyObject, param::Dict{String,Any}, fa
     ρ = fp + sum(fa; dims =3)[:,:,1].*(2*π/Nθ)
     h = reshape(ρ, Nx*Nx)
     ax.hist(h; bins = edges, histtype = "step", density = true)
+    ax.xaxis.set_ticks(0:0.25:1)
+end
+function pde_density_hist_1d(fig::Figure, ax::PyObject, param::Dict{String,Any}, fa, fp; bins = 3)
+    @unpack Nx, Nθ = param
+    edges = collect((-1/(2*bins)):(1/(bins)):(1+1/(2*bins)))
+    ρ = fp + sum(fa; dims =2)[:,1].*(2*π/Nθ)
+    #h = reshape(ρ, Nx*Nx)
+    ax.hist(ρ; bins = edges, histtype = "step", density = true)
     ax.xaxis.set_ticks(0:0.25:1)
 end

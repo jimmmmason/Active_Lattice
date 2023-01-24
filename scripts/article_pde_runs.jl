@@ -36,21 +36,23 @@ pmap(perturb_pde_run_1d, params; distributed = true, batch_size=1, on_error=noth
 params = []
         pert = "n=1"
         T  = 2.0
-        χ = 0.25
+        χ = 0.5
+        γ = 0.1
         using Roots
-        f(x) = lin_stab_line_fraction(x,χ; Dx =1. ,Pe = 20., Dθ =100.,k=40 )
-        root = find_zero(f, (0.6,  0.8))
-for ρ in (-collect(0.0:0.01:0.05).+root), Pe in [20.], Dθ in [100.], δ in [1e-6]
-        Nx = 128
-        Nθ = 64
-        name = "article_wave_1d_δ=$(δ)"
+        #f(x) = lin_stab_line_fraction(x,χ; Dx =1. ,Pe = 20., Dθ =100.,k=40 )
+        #root = find_zero(f, (0.6,  0.8))
+        # ρ in (-collect(0.0:0.01:0.05).+root)
+for ρ in [0.9], Pe in [150.,125.,200.], Dθ in [4.], δ in [1e-2]
+        Nx = 50
+        Nθ = 20
+        name = "article_wave_1d_δ=$(δ)_γ=$(γ)"
         local param
                 #
                 param = pde_param_fraction(; name = name, 
                         ρ = ρ, Pe = Pe, χ = χ, T = T, 
                         Dθ = Dθ, δt = 1e-5, Nx = Nx, Nθ = Nθ, 
                         save_interval = 1e-4, max_steps = 1e8,
-                        pert = pert, δ = δ, k = 40
+                        pert = pert, δ = δ, k = 40, γ = 0.1
                 )
                 #
                 push!(params,param)
@@ -60,6 +62,9 @@ pmap(perturb_pde_run_1d, params; distributed = true, batch_size=1, on_error=noth
 #make video
 pmap(make_video_1d, params; distributed = true, batch_size=1, on_error=nothing,)
 #make_video_1d(params[1]; frames = 1000)
+
+param = params[2]
+perturb_pde_run_1d(param)
 ###
 
 

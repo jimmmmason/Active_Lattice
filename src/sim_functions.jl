@@ -3,7 +3,7 @@ using DrWatson
 @quickactivate "Active_Lattice"
 println("Loading ...")
 ##
-#runnning simulation
+#runnning simulation 
 using StatsBase, DataStructures, UnPack, LinearAlgebra, Random
 
 function uniform_initial_param(; name = "test", D =1. , λ =1. ,ρa = 0.1, ρp = 0.1, L=10, d=2, Δt = 0.01, Dθ =10., T=1.0, γ = 0.)
@@ -11,7 +11,7 @@ function uniform_initial_param(; name = "test", D =1. , λ =1. ,ρa = 0.1, ρp =
     E = [[1,0],[0,1],[0,-1],[-1,0],]
     site_distribution = fill([1-ρa-ρp, ρa, ρp],(L,L))
     POSITIONS = reshape(collect(1:(L^2*4)), (L,L,4))
-    function angles(x,n) 
+    function angles(x,n)
         if n == 1
             return 2*π*rand()
         else
@@ -103,43 +103,43 @@ end
 
 function model_step!(param::Dict{String,Any},model::Dict{String,Any})
     @unpack L, E, rates, Dθ, Δt, POSITIONS = param
-    @unpack η, j, t, α, Δτ, w = model
-    #increase time
-    K = round(α/round(Dθ/Δt))
-    dt = round(Dθ/Δt)*K*Δτ  #roughly Δt
-    t += dt
-    #see if jump occurs
-    for _ in 1:round(Dθ*100)
-        for _ in 1:K
-            if rand() < α*Δτ 
+    @unpack η, j, t, α, w = model
+    if 2*Dθ*Δt> 0.05*2*π
+        println("time step too large")
+        Δt = 0
+        t += 10e6
+    end
+    #run Gillespie algorithm until t+Δt
+    δt::Float64 = 0.
+    while δt < Δt
+            #update total propensity
+            α = sum(w)
             #select jump
-                jump  = sample(j, w)
+            jump  = sample(j, w)
             #execute jumps
-                η[jump[2]...,:], η[jump[1]...,:] = η[jump[1]...,:], η[jump[2]...,:]
-            #correct propensity
-                for (x₁, x₂) in jump
-                    for i in 1:4
+            η[jump[2]...,:], η[jump[1]...,:] = η[jump[1]...,:], η[jump[2]...,:]
+            #update time
+            δt += randexp(α)
+            #update propensity
+            for (x₁, x₂) in jump
+                for i in 1:4
                         local y₁, y₂ 
                         #find adjacent site
                         y₁, y₂  = ([x₁, x₂] + E[i] +[L-1,L-1]) .% L + [1,1]
                         #correct new rates 
                         w[POSITIONS[x₁, x₂ ,i]]  = rates(η[x₁, x₂, : ],η[y₁, y₂, : ],i  )
                         w[POSITIONS[y₁, y₂ ,5-i]] = rates(η[y₁, y₂, : ],η[x₁, x₂, : ],5-i)
-                    end
                 end
-                α = sum(w)
             end
-        end
-        #diffuse angles
-        for x₁ in 1:L, x₂ in 1:L
-            if η[x₁,x₂,1] == 1.
-                r = randn()
-                η[x₁,x₂,2] = (η[x₁,x₂,2] + sqrt(2*K*Δτ*Dθ)*r + 2*π) % (2*π)
-            end
+    end
+    #diffuse angles for interval t+δt
+    for x₁ in 1:L, x₂ in 1:L
+        if η[x₁,x₂,1] == 1.
+            r = randn()
+            η[x₁,x₂,2] = (η[x₁,x₂,2] + sqrt(2*Dθ*δt)*r + 2*π) % (2*π)
         end
     end
-    Δτ = Δt/α
-    @pack! param = Δτ
+    t += δt
     @pack! model = η, w, t
 end
 
@@ -264,6 +264,12 @@ end
 function make_sim_vid(param)
     @unpack T = param
     t_saves, η_saves = load_etas(param, T; dump_interval = 0.001)
+    animate_etas(param,t_saves,η_saves)
+end
+
+function make_sim_vid_lite(param)
+    @unpack T = param
+    t_saves, η_saves = load_etas(param, T; dump_interval = 0.01)
     animate_etas(param,t_saves,η_saves)
 end
 
