@@ -12,14 +12,54 @@ include("/home/jm2386/Active_Lattice/src/article_src.jl")
 params = []
         pert = "n=1"
         T  = 1.0
-        δ = 0.01
-for ρ in append!(collect(0.425:0.025:0.9),collect(0.95:0.001:0.999)), χ in [1.0], Pe in collect(2.:2.0:40.), Dθ in [4.]
+        δ  = 1e-2
+#for ρ in append!(collect(0.425:0.025:0.9),collect(0.95:0.001:0.999)), χ in [1.0], Pe in collect(2.:2.0:40.), Dθ in [4.]
+for ρ in collect(0.45:0.01:0.6), χ in [1.0], Pe in collect(10.:2.0:40.), Dθ in [4.]
         local param
         #
-        name = "article_stability_1d_δ=$(δ)"
+        name = "article_stability_active_1d_δ=$(δ)"
         param = pde_param_fraction(; name = name, 
                         ρ = ρ, Pe = Pe, χ = χ, T = T, 
-                        Dθ = Dθ, δt = 1e-5, Nx = 50, Nθ = 20, 
+                        Dθ = Dθ, δt = 1e-5, Nx = 128, Nθ = 64, 
+                        save_interval = 0.01, max_steps = 1e7,
+                        pert = pert, k =40, δ = δ,
+                )
+        #
+        push!(params,param)
+end
+for ρ in collect(0.69:0.01:0.9), χ in [1.0], Pe in collect(6.:2.0:14.), Dθ in [4.]
+        local param
+        #
+        name = "article_stability_active_1d_δ=$(δ)"
+        param = pde_param_fraction(; name = name, 
+                        ρ = ρ, Pe = Pe, χ = χ, T = T, 
+                        Dθ = Dθ, δt = 1e-5, Nx = 128, Nθ = 64, 
+                        save_interval = 0.01, max_steps = 1e7,
+                        pert = pert, k =40, δ = δ,
+                )
+        #
+        push!(params,param)
+end
+for ρ in collect(0.91:0.01:0.99), χ in [1.0], Pe in collect(6.:2.0:20.), Dθ in [4.]
+        local param
+        #
+        name = "article_stability_active_1d_δ=$(δ)"
+        param = pde_param_fraction(; name = name, 
+                        ρ = ρ, Pe = Pe, χ = χ, T = T, 
+                        Dθ = Dθ, δt = 1e-5, Nx = 128, Nθ = 64, 
+                        save_interval = 0.01, max_steps = 1e7,
+                        pert = pert, k =40, δ = δ,
+                )
+        #
+        push!(params,param)
+end
+for ρ in [0.55], χ in [1.0], Pe in [14.], Dθ in [4.]
+        local param
+        #
+        name = "article_stability_test_1d_δ=$(δ)"
+        param = pde_param_fraction(; name = name, 
+                        ρ = ρ, Pe = Pe, χ = χ, T = T, 
+                        Dθ = Dθ, δt = 1e-5, Nx = 128, Nθ = 64, 
                         save_interval = 0.01, max_steps = 1e7,
                         pert = pert, k =40, δ = δ,
                 )
@@ -27,6 +67,7 @@ for ρ in append!(collect(0.425:0.025:0.9),collect(0.95:0.001:0.999)), χ in [1.
         push!(params,param)
 end
 #run pdes
+perturb_pde_run_1d(params[1])
 pmap(perturb_pde_run_1d, params; distributed = true, batch_size=1, on_error=nothing,)
 ###
 

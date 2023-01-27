@@ -119,7 +119,7 @@ function model_step!(param::Dict{String,Any},model::Dict{String,Any})
             #execute jumps
             η[jump[2]...,:], η[jump[1]...,:] = η[jump[1]...,:], η[jump[2]...,:]
             #update time
-            δt += randexp(α)
+            δt += randexp()/α
             #update propensity
             for (x₁, x₂) in jump
                 for i in 1:4
@@ -182,9 +182,9 @@ function run_and_dump_sim(param::Dict{String,Any},model::Dict{String,Any},T; dum
 end
 
 function run_sim(param)
-    @unpack T, Δt = param
+    @unpack T, Δt, χ, ρ, Pe = param
     model = initialize_model(param);
-    println("starting run: γ = $(param["γ"]), ρ = $(param["ρa"]), λ = $(param["λ"])")
+    println("starting run: χ = $(param["χ"]), ρ = $(param["ρ"]), Pe = $(param["Pe"])")
     s = 50*Δt
     while s<T 
         try
@@ -213,7 +213,7 @@ function run_sim(param)
         s+= 50*Δt
     end
     run_model_until!(param, model, T; save_on = true);
-    println("success: γ = $(param["γ"]), ρ = $(param["ρa"]), λ = $(param["λ"])")
+    println("success: χ = $(param["χ"]), ρ = $(param["ρ"]), Pe = $(param["Pe"])")
 end
 
 function run_sim_old(param)
@@ -263,7 +263,7 @@ end
 
 function make_sim_vid(param)
     @unpack T = param
-    t_saves, η_saves = load_etas(param, T; dump_interval = 0.001)
+    t_saves, η_saves = load_etas(param, T; dump_interval = 0.01)
     animate_etas(param,t_saves,η_saves)
 end
 
@@ -273,7 +273,7 @@ function make_sim_vid_lite(param)
     animate_etas(param,t_saves,η_saves)
 end
 
-function plot_eta(fig::Figure, ax::PyObject, param::Dict{String,Any}, t::Float64, η::Array{Float64,3}; title = true, r =5)
+function plot_eta(fig::Figure, ax::PyObject, param::Dict{String,Any}, t::Float64, η::Array{Float64,3}; title = true, r = 3)
     @unpack name, L, λ, γ, ρa, ρp, E, Δt, site_distribution, angles, rates = param
     ax.clear()
     #collect data
@@ -295,7 +295,7 @@ function plot_eta(fig::Figure, ax::PyObject, param::Dict{String,Any}, t::Float64
             ax.set_title("Φ = $(Φ)")
         end
     # Plot points
-    polarisation = local_polarisation(η,L; r=r)
+    densities = reshape(local_density(η,L; r=r),L^2) #local_polarisation(η,L; r=r)
     xs = []
     ys = []
     for x₁ in 1:L, x₂ in 1:L
@@ -303,7 +303,7 @@ function plot_eta(fig::Figure, ax::PyObject, param::Dict{String,Any}, t::Float64
         push!(ys, (x₂-0.5)/L)
     end
     ax.scatter(xs,ys, cmap = bone(),
-            c = polarisations/maximum(polarisations),
+            c = densities,
             s = 75, 
             marker = "s", 
             linewidths = 0.,
@@ -330,7 +330,7 @@ function plot_eta(fig::Figure, ax::PyObject, param::Dict{String,Any}, t::Float64
 end 
 
 function plot_eta_old(fig::Figure, ax::PyObject, param::Dict{String,Any}, t::Float64, η::Array{Float64,3}; title = true)
-    @unpack name, L, λ, γ, ρa, ρp,  E, Δt, site_distribution, angles, rates = param
+    @unpack name, L, λ, γ, ρa, ρp,  E, Δt, site_distribution, angles, rates, Pe, ρ, χ = param
     ax.clear()
     #collect data
     passive, active, directions, polarisations = extract_points(η,L)
@@ -344,7 +344,11 @@ function plot_eta_old(fig::Figure, ax::PyObject, param::Dict{String,Any}, t::Flo
         ax.axis([0., 1., 0., 1.])
         ax.set_aspect("equal")
         if title
-            ax.set_title("ρₐ = $(ρa),  ρₚ = $(ρp), Pe = $(λ), t = $(t), Φ = $(Φ)")
+            if χ == 1.0
+                ax.set_title("ϕ = $(ρ), Pe = $(Pe), t = $(round(t; digits =3)), Φ = $(Φ)")
+            else 
+                ax.set_title("ϕ = $(ρ),  χ = $(χ), Pe = $(Pe), t = $(t), Φ = $(Φ)")
+            end
         else
             ax.set_title("Φ = $(Φ)")
         end
@@ -377,21 +381,25 @@ function plot_eta_old(fig::Figure, ax::PyObject, param::Dict{String,Any}, t::Flo
 end 
 
 function plot_eta_old_old(fig::Figure, ax::PyObject, param::Dict{String,Any}, t::Float64, η::Array{Float64,3}; title = true)
-    @unpack name, L, λ, γ, ρa, ρp,  E, Δt, site_distribution, angles, rates = param
+    @unpack name, L, λ, γ, ρa, ρp,  E, Δt, site_distribution, angles, rates, Pe, ρ, χ = param
     ax.clear()
     #collect data
     passive, active, directions, polarisations = extract_points(η,L)
     dx = cos.(directions)
     dy = sin.(directions)
     t = round(t; digits=5)
-    Φ = round(translation_invariance(η;Ω = Ω,L= L); digits =4)
+    Φ = round(translation_invariance(η;Ω = Ω,L= L); digits =3)
     #figure configuration
     ax.xaxis.set_ticks([])
         ax.yaxis.set_ticks([])
         ax.axis([0., 1., 0., 1.])
         ax.set_aspect("equal")
         if title
-            ax.set_title("ρₐ = $(ρa),  ρₚ = $(ρp), Pe = $(λ), t = $(t), Φ = $(Φ)")
+            if χ == 1.0
+                ax.set_title("ϕ = $(ρ), Pe = $(Pe), t = $(round(t; digits =3)), Φ = $(Φ)")
+            else 
+                ax.set_title("ϕ = $(ρ),  χ = $(χ), Pe = $(Pe), t = $(t), Φ = $(Φ)")
+            end
         else
             ax.set_title("Φ = $(Φ)")
         end
@@ -417,21 +425,25 @@ function plot_eta_old_old(fig::Figure, ax::PyObject, param::Dict{String,Any}, t:
 end 
 
 function plot_eta_polarisation(fig::Figure, ax::PyObject, param::Dict{String,Any}, t::Float64, η::Array{Float64,3}; title = true)
-    @unpack name, L, λ, γ, ρa, ρp,  E, Δt, site_distribution, angles, rates = param
+    @unpack name, L, λ, γ, ρa, ρp,  E, Δt, site_distribution, angles, rates, Pe, ρ, χ = param
     ax.clear()
     #collect data
     passive, active, directions, polarisations = extract_points(Ω,η,L)
     dx = cos.(directions)
     dy = sin.(directions)
     t = round(t; digits=5)
-    Φ = round(translation_invariance(η;Ω = Ω,L= L); digits =4)
+    Φ = round(translation_invariance(η;Ω = Ω,L= L); digits =3)
     #figure configuration
     ax.xaxis.set_ticks([])
         ax.yaxis.set_ticks([])
         ax.axis([0., 1., 0., 1.])
         ax.set_aspect("equal")
         if title
-            ax.set_title("ρₐ = $(ρa),  ρₚ = $(ρp), Pe = $(λ), t = $(t), Φ = $(Φ)")
+            if χ == 1.0
+                ax.set_title("ϕ = $(ρ), Pe = $(Pe), t = $(round(t; digits =3)), Φ = $(Φ)")
+            else 
+                ax.set_title("ϕ = $(ρ),  χ = $(χ), Pe = $(Pe), t = $(t), Φ = $(Φ)")
+            end
         else
             ax.set_title("Φ = $(Φ)")
         end
@@ -560,6 +572,20 @@ function time_density_hist(fig::Figure, ax::PyObject, param::Dict{String,Any}, t
     ax.hist(h; bins = edges, histtype = "step", density = true)
     ax.xaxis.set_ticks(0:0.5:1)
 end
+
+function local_density(η, L; r = 3) 
+    local_den = fill(1., (L,L))
+    E = [[i,j] for i in (-r):1:r for j in (-r):1:r ]
+    S = length(E)
+    for x₁ in 1:L, x₂ in 1:L
+        for e ∈ E
+            y₁, y₂  = ([x₁,x₂] + e +[L-1,L-1]) .% L + [1,1]
+                local_den[x₁, x₂] += -site_ρ(η[y₁, y₂,: ])/S
+        end
+    end
+    return local_den
+end
+
 
 function local_polarisation(η, L; r = 3) 
     local_polarisatoin = fill(Complex(0.), (L,L))

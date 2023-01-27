@@ -24,7 +24,7 @@ PyPlot.close("all")
 
 ###
 # WARNING CHECK THE STAB SOLVER HAS BEEN RESET!!! 
-#stability plots 
+#stability plots
 #parameters
 χ = 1.0
 params = []
@@ -56,7 +56,7 @@ for ρ in [0.5], χ in [1.0], Pe in [4.]
 for param in params
     stabdata = find_stab_data(;stabdata = Dict{String,Any}(), ρs = ρs, Pes = Pes,  param = param, save_on = true, t_end = 1.0, stab_type = "full")
 end
-# WARNING CHECK THE STAB SOLVER HAS BEEN RESET!!! 
+# WARNING CHECK THE STAB SOLVER HAS BEEN RESET!!!
 #stab plot
 ρs = collect(0.45:0.05:1.0)
 χ = 1.0
@@ -117,6 +117,9 @@ PyPlot.close("all")
 ###
 #dist from uniform plots
 #
+param = params[1]
+@unpack Pe,χ,ρ = param
+#
 χ = 0.75
 ρ = 0.55
 Pe = 10.
@@ -139,15 +142,14 @@ params = []
                 )
 #
 t_saves, fa_saves, fp_saves = load_pdes(param,1.0; save_interval = 0.01)
-    dist_saves = time_dist_from_unif(param, fa_saves, fp_saves)
+    dist_saves = time_dist_from_unif_1d(param, fa_saves, fp_saves)
     fig, ax = PyPlot.subplots(figsize =(10, 10))
     ax.plot(t_saves,dist_saves)
     ax.set_xlabel("t")
     ax.set_ylabel("‖ρ-ϕ‖₂")
-    ax.set_title("ℓ = $(sqrt(Dθ)) ρ = $(ρ) Pe = $(Pe) χ=$(χ)")
+    ax.set_title("ℓ = $(1/sqrt(Dθ)) ρ = $(ρ) Pe = $(Pe) χ=$(χ)")
 display(fig)
 ###
-
 
 
 ###
@@ -185,7 +187,7 @@ end
 
 
 perturb_pde_run_1d(param)
-make_phase_video_1d(param; frames = 100, speed_factor = 0.1)
+make_phase_video_1d(param; frames = 100, speed_factor = 1.0)
 
 j =1
 k = 20

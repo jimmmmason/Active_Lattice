@@ -71,7 +71,7 @@ function sim_param_fraction(;  name = "test", D =1. , Pe =1. ,ρ = 0.5, χ = 0.5
         end
     end
 
-    @pack! param = name, L, D, λ, γ, ρa, ρp, Δt, E, site_distribution, angles, rates, Dθ, T, POSITIONS
+    @pack! param = name, L, D, λ, γ, ρa, ρp, Δt, E, site_distribution, angles, rates, Dθ, T, POSITIONS, χ, ρ, Pe
     return param
 end
 #

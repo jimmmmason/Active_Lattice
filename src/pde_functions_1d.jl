@@ -316,7 +316,7 @@ function perturb_pde_1d!(param::Dict{String,Any}, density::Dict{String,Any}; δ 
             ω = 2*π
             a, A = ap_MathieuEigen(matrix)
             Pa = (x,θ) -> real.( dot(A[2:1:(k+1),k+1],cos.(θ*K*(2*π/Nθ)))*exp(-im*x*ω/Nx) )
-            Pp = (x) -> real.(A[1,k+1]*exp(-im*x*ω/Nx));
+            Pp = (x) -> real.(A[1,k+1]*exp(im*x*ω/Nx));
     end
     if pert == "rand"
         Pa = (x,θ) -> δ*ρa*(( rand() - 0.5 )/(ρa+0.01))/(2*π);

@@ -3,7 +3,6 @@ using DrWatson
 @quickactivate "Active_Lattice"
 using Distributed
 
-
 #= dumbo bash commands to check they are awake
 ssh jm2386@ssh.maths.cam.ac.uk
 

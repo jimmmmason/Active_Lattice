@@ -130,7 +130,7 @@ function ap_MathieuMatrix(ρa,ρp,Dx,Pe,Dθ; k::Int64 = 10, ω = 2*π,γ= 0.0)
     =#
     s = DD - 1
     p = -Dx*ds*ω^2
-    q = -v0*im*ω*ds
+    q = -v0*im*ω*ds/2 #should have /2 ??? 
     matrix = Complex.(zeros(k+1, k+1))
     for u in 1:(k+1)
         for v in 1:(k+1)
@@ -143,7 +143,7 @@ function ap_MathieuMatrix(ρa,ρp,Dx,Pe,Dθ; k::Int64 = 10, ω = 2*π,γ= 0.0)
     end
     matrix[1, 1] = - Dx*(ω^2)*(ds+ρp*DD)
     matrix[1, 2] = - 2*π*Dx*(ω^2)*ρp*DD
-    matrix[1, 3] = - v0*im*ω*π*ρp*s
+    matrix[1, 3] = - π*v0*im*ω*ρp*s
     matrix[2, 1] = - Dx*(ω^2)*(ρa/(2*π))*DD
     matrix[2, 2] = - Dx*(ω^2)*(ds+ρa*DD)
     matrix[2, 3] = - v0*im*ω*(ρa*s+ds)/2
