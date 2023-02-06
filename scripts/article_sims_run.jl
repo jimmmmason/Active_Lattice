@@ -11,14 +11,14 @@ include("/home/jm2386/Active_Lattice/src/article_src.jl")
 #generic parameters close to stable
 params = []
         pert = "rand"
-        T  = 4.0
+        T  = 2.0
         χ = 1.0
         L = 128
-        Δt = 0.01
+        Δt = 0.001
         #using Roots
         #f(x) = lin_stab_line_fraction(x,χ; Dx =1. ,Pe = 20., Dθ =100.,k=40 )
         #root = find_zero(f, (0.6,  0.8))
-for ρ in [0.7], Pe in [8., 10., 12.], Dθ in [4.]
+for ρ in [0.7], Pe in [20.], Dθ in [4.]
         name = "article_sim_safe"
         local param
                 #

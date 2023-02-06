@@ -26,6 +26,10 @@ exit
 #addprocs([("orthosie",:auto)])
 addprocs([("refract",:auto)])
 addprocs([("radius",:auto)])
+addprocs([("teryas",4)])
+addprocs([("eloquence",10)])
+addprocs([("heart",4)])
+addprocs([("kenku",:auto)])
 
 rmprocs()
 rmprocs([8,12,14])

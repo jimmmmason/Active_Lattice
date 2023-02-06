@@ -102,7 +102,7 @@ Dθ= 4.0
                         save_interval = 0.01, max_steps = 1e7,
                         pert = pert, k =40, δ = δ,
     )
-fig, ax = fig, ax = PyPlot.subplots(figsize =(10, 10))
+fig, ax = PyPlot.subplots(figsize =(10, 10))
     plot_imaginary_frac(fig, ax; xs = collect(0.4:0.01:1.0), ys =collect(0.0:5.0:500.0),param = param, χ = χ, axlim = [0.4, 1., 0., 500.])
 display(fig)
     pathname = "/store/DAMTP/jm2386/Active_Lattice/plots/article_imaginary/$(name)";
@@ -183,7 +183,11 @@ for i in 10:10:100
     fig, axs = plt.subplots(3, 2, figsize=(12,12))
     test_vid_phase_pde_plot_1d(fig, axs, param, t_saves, fa_saves, fp_saves, i;speed_factor = 1.0 )
     display(fig)
+    i+=1
 end
+
+
+rc("text", usetex=false)
 
 
 perturb_pde_run_1d(param)

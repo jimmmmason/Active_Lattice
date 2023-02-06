@@ -295,7 +295,7 @@ function plot_eta(fig::Figure, ax::PyObject, param::Dict{String,Any}, t::Float64
             ax.set_title("Φ = $(Φ)")
         end
     # Plot points
-    densities = reshape(local_density(η,L; r=r),L^2) #local_polarisation(η,L; r=r)
+    densities = reshape(local_density(η,L; r=r)',L^2)/(2*r+1)^2  #reshape(local_density(η,L; r=r),L^2) #local_polarisation(η,L; r=r)
     xs = []
     ys = []
     for x₁ in 1:L, x₂ in 1:L
@@ -568,7 +568,7 @@ function time_density_hist(fig::Figure, ax::PyObject, param::Dict{String,Any}, t
     for η ∈ η_saves
         append!(h, density_hist(param, η; r = r));
     end
-    edges = collect((-1/(2*bins)):(1/(bins)):(1+1/(2*bins)))
+    edges = collect((-1/(2*numbins)):(1/(numbins)):(1+(1/(2*numbins))))
     ax.hist(h; bins = edges, histtype = "step", density = true)
     ax.xaxis.set_ticks(0:0.5:1)
 end

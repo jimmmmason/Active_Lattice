@@ -417,6 +417,36 @@ function perturb_pde_run(param)
     run_pde_until!(param,density,T; save_on = true, max_steps = max_steps, save_interval = save_interval)
 end
 
+function load_pde_run(param)
+    @unpack T, save_interval, max_steps, pert, δ = param
+    s = 0.5
+    i = 0
+    fa = []
+    fp = []
+    t = 0.
+    while s ≤ T 
+        try
+            t_saves, fa_saves, fp_saves = load_pdes(param,s; save_interval = 0.01, start_time = s-0.01)
+            fa = fa_saves[1]
+            fp = fp_saves[1]
+            t = t_saves[1]
+            println("load success at t = $(s)")
+            i = 1
+        catch
+            println("load failed at t = $(s)")
+        end
+        s += 0.5
+    end
+    if i==1
+        println("loading success")
+        density = Dict{String,Any}()
+        @pack! density = fa, fp ,t
+        run_pde_until!(param,density,T; save_on = true, max_steps = max_steps, save_interval = save_interval)
+    else
+        println("loading failed")
+    end
+end
+
 ##
 #phase seperation metircs
 

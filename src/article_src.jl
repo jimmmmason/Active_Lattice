@@ -82,6 +82,13 @@ function lin_stab_line_fraction(ρ,χ; Dx =1. ,Pe = 20., Dθ =100.,k=40 )
     amin = ap_MathieuEigen_lite(matrix; k = k)  
     return real(amin)
 end
+function a_lin_stab_line_fraction(ρ,χ; Dx =1. ,Pe = 20., Dθ =100.,k=40 )
+    ρa = χ*ρ
+    ρp = (1-χ)*ρ
+    matrix = a_MathieuMatrix(ρa,ρp,Dx,Pe,Dθ; k = k);
+    amin = a_MathieuEigen_lite(matrix; k = k)
+    return real(amin)
+end
 function lin_imaginary_fraction(ρ,χ; Dx =1. ,Pe = 20., Dθ =100.,k=40 )
     ρa = χ*ρ
     ρp = (1-χ)*ρ
@@ -89,8 +96,15 @@ function lin_imaginary_fraction(ρ,χ; Dx =1. ,Pe = 20., Dθ =100.,k=40 )
     amin = ap_MathieuEigen_lite(matrix; k = k)  
     return imag(amin)
 end
+function a_lin_imaginary_fraction(ρ,χ; Dx =1. ,Pe = 20., Dθ =100.,k=40 )
+    ρa = χ*ρ
+    ρp = (1-χ)*ρ
+    matrix = a_MathieuMatrix(ρa,ρp,Dx,Pe,Dθ; k = k);
+    amin = a_MathieuEigen_lite(matrix; k = k)  
+    return imag(amin)
+end
 #
-function find_stab_data(;stabdata = Dict{String,Any}(), ρs = 0.4:0.05:1.0, Pes = 5.:5.:100.,  param = param, save_on = true, t_end = 1.0, stab_type = "full")
+function find_stab_data(;stabdata = Dict{String,Any}(), ρs = 0.4:0.05:1.0, Pes = 5.:5.:100.,  param = param, save_on = true, t_end = 1.0, stab_type = "full", save_interval = 0.1)
     @unpack Dθ, Nx, Nθ, χ, name,T,pert,k,δ,max_steps,save_interval,δt = param
     λs = sqrt(Dθ)*Pes
     filename = "/store/DAMTP/jm2386/Active_Lattice/data/pde_pro/$(name)/stability_type=$(stab_type)_Nx=$(Nx)_Nθ=$(Nθ)_Dθ=$(Dθ)_χ=$(χ).jld2"
@@ -136,13 +150,13 @@ function find_stab_data(;stabdata = Dict{String,Any}(), ρs = 0.4:0.05:1.0, Pes 
                             save_interval = save_interval, max_steps = max_steps,
                             pert = pert, k =k, δ = δ
                         )
-                        t_saves, fa_saves, fp_saves = load_pdes_1d(param,t_end; save_interval = 0.01, start_time = 0.0)
+                        t_saves, fa_saves, fp_saves = load_pdes_1d(param,t_end; save_interval = save_interval, start_time = 0.0)
                         dist_saves = time_dist_from_unif_1d(param, fa_saves, fp_saves)
 
                         stab_dsit0 = dist_from_unif_1d(param, fa_saves[1], fp_saves[1])
                         stab_dsit1 = maximum(dist_saves)
 
-                        if (2*stab_dsit0>stab_dsit1)&(λ ∉ stable)
+                        if (1.2*stab_dsit0>stab_dsit1)&(λ ∉ stable)
                             push!(stable, λ)
                         elseif (λ ∉ unstable)
                             push!(unstable, λ)
@@ -254,9 +268,6 @@ function plot_stab_frac(fig, ax, stabdata; ρs = 0.4:0.05:1.0 ,xs = collect(0.4:
     ax.xaxis.set_ticks(xtic)
     ax.yaxis.set_ticks(ytic)
     ax.axis(axlim)
-    ax.set_xlabel("ρ")
-    ax.set_ylabel("Pe")
-    ax.set_title("ℓ = $(1/sqrt(Dθ)), χ = $(χ)")
 end
 function plot_imaginary_frac(fig, ax; ρs = 0.4:0.05:1.0 ,xs = collect(0.4:0.001:1.0), ys =collect(0.0:0.5:100.0), xtic = 0.4:0.2:1, ytic = 0:10:100, axlim = [0.4, 1., 0., 100.], param = param, χ = 0.5 )
     @unpack Dθ, Dx, ρp = param
@@ -297,19 +308,38 @@ function plot_imaginary_frac(fig, ax; ρs = 0.4:0.05:1.0 ,xs = collect(0.4:0.001
     ax.set_title("ℓ = $(1/sqrt(Dθ)), χ = $(χ)")
 end
 #
-function pde_density_hist(fig::Figure, ax::PyObject, param::Dict{String,Any}, fa, fp; bins = 3)
+function pde_density_hist(fig::Figure, ax::PyObject, param::Dict{String,Any}, fa, fp; r =5, bins = 3, smoothing = false)
     @unpack Nx, Nθ = param
-    edges = collect((-1/(2*bins)):(1/(bins)):(1+1/(2*bins)))
+    edges = collect(0.:(1/(bins)):1.0)
     ρ = fp + sum(fa; dims =3)[:,:,1].*(2*π/Nθ)
-    h = reshape(ρ, Nx*Nx)
+    if smoothing 
+        h = zeros(Nx,Nx)
+        B = [[i,j] for i in (-r):1:r for j in (-r):1:r ]
+        for x₁ in 1:Nx, x₂ in 1:Nx
+            for e in B
+                y₁, y₂  = ([x₁, x₂] + e +[Nx-1,Nx-1]) .% Nx + [1,1]
+                h[x₁,x₂] += ρ[y₁,y₂]/(2*r+1)^2
+            end
+        end
+        h = reshape(h, Nx*Nx)
+    else
+        h = reshape(ρ, Nx*Nx)
+    end
     ax.hist(h; bins = edges, histtype = "step", density = true)
     ax.xaxis.set_ticks(0:0.25:1)
 end
-function pde_density_hist_1d(fig::Figure, ax::PyObject, param::Dict{String,Any}, fa, fp; bins = 3)
+function pde_density_hist_1d(fig::Figure, ax::PyObject, param::Dict{String,Any}, fa, fp; r = 5, bins = 3)
     @unpack Nx, Nθ = param
-    edges = collect((-1/(2*bins)):(1/(bins)):(1+1/(2*bins)))
+    edges = collect(0.:(1/(bins)):1.0)
     ρ = fp + sum(fa; dims =2)[:,1].*(2*π/Nθ)
-    #h = reshape(ρ, Nx*Nx)
-    ax.hist(ρ; bins = edges, histtype = "step", density = true)
+    h = zeros(Nx)
+    B = [i for i in (-r):1:r ]
+    for x₁ in 1:Nx
+        for e in B
+            y₁  = (x₁ + e +Nx-1) % Nx + 1
+            h[x₁] += ρ[y₁]/(2*r+1)
+        end
+    end
+    ax.hist(h; bins = edges, histtype = "step", density = true)
     ax.xaxis.set_ticks(0:0.25:1)
 end

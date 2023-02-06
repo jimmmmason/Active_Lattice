@@ -38,7 +38,7 @@ function animate_pdes(param,t_saves,fa_saves,fp_saves)
     myanim[:save](filename, bitrate=-1, dpi= 100, extra_args=["-vcodec", "libx264", "-pix_fmt", "yuv420p"])
 end 
 
-function plot_pde_mag(fig::Figure, ax::PyObject, param::Dict{String,Any}, density::Dict{String,Any})
+function plot_pde_mag(fig::Figure, ax::PyObject, param::Dict{String,Any}, density::Dict{String,Any}; scale = "local", cbar = true)
     @unpack λ, Nx, Nθ, S, ρa, ρp= param
     @unpack fa, fp, t = density
     #fig, ax = PyPlot.subplots(figsize =(10, 10))
@@ -65,13 +65,19 @@ function plot_pde_mag(fig::Figure, ax::PyObject, param::Dict{String,Any}, densit
     xx = [x̃ for x̃ ∈ x, ỹ ∈ y]'
     yy = [ỹ for x̃ ∈ x, ỹ ∈ y]'
     ax.streamplot(xx, yy, m[:,:,1]', m[:,:,2]', color = absmag', cmap = colmap, density = 1)#2.5
-    norm1 = matplotlib.colors.Normalize(vmin=minimum(absmag), vmax= maximum(absmag));
-    fig.colorbar(matplotlib.cm.ScalarMappable(norm=norm1, cmap = colmap), ax = ax, fraction = 0.0455)
+    if scale == "local"
+        norm1 = matplotlib.colors.Normalize(vmin=minimum(absmag), vmax= maximum(absmag));
+    else
+        norm1 = matplotlib.colors.Normalize(vmin=scale[1], vmax= scale[2]);
+    end
+    if cbar
+        fig.colorbar(matplotlib.cm.ScalarMappable(norm=norm1, cmap = colmap), ax = ax, fraction = 0.0455)
+    end
     #display(fig)
     return fig
 end
 
-function plot_pde_mass(fig::Figure, ax::PyObject, param::Dict{String,Any}, density::Dict{String,Any})
+function plot_pde_mass(fig::Figure, ax::PyObject, param::Dict{String,Any}, density::Dict{String,Any}; scale = "relative", cbar = true)
     @unpack λ, Nx, Nθ, S, ρa, ρp= param
     @unpack fa, fp, t = density
     #=
@@ -95,9 +101,15 @@ function plot_pde_mass(fig::Figure, ax::PyObject, param::Dict{String,Any}, densi
     #ax.set_title("ρₐ = $(ρa),  ρₚ = $(ρp), Pe = $(λ), t = $(t)")
     # Plot points
     colmap = PyPlot.plt.cm.viridis_r
-    norm1 = matplotlib.colors.Normalize(vmin=minimum(ρ), vmax= maximum(ρ) );
+    if scale == "relative"
+        norm1 = matplotlib.colors.Normalize(vmin=0., vmax= 1.);
+    else
+        norm1 = matplotlib.colors.Normalize(vmin=minimum(ρ), vmax= maximum(ρ) );
+    end
     ax.contourf(Δx:Δx:1, Δx:Δx:1,ρ'; levels = 25, norm = norm1, cmap = colmap )
-    fig.colorbar(matplotlib.cm.ScalarMappable(norm=norm1, cmap = colmap), ax = ax, fraction = 0.0455)
+    if cbar
+        fig.colorbar(matplotlib.cm.ScalarMappable(norm=norm1, cmap = colmap), ax = ax, fraction = 0.0455)
+    end
     #fig
     return fig
 end 
@@ -336,7 +348,7 @@ function test_vid_phase_pde_plot_1d(fig::Figure, axs, param::Dict{String,Any}, t
     #axs[1].xaxis.set_ticks(xtic)
     #axs[1].yaxis.set_ticks(ytic)
     #axs[1].axis(axlim)
-    axs[1].axis([0., 1., minimum(minimum.(ρa_saves))-ρa,maximum(maximum.(ρa_saves))-ρa])
+    #axs[1].axis([0., 1., minimum(minimum.(ρa_saves))-ρa,maximum(maximum.(ρa_saves))-ρa])
     axs[1].set_xlabel("x")
     axs[1].set_ylabel("ρₐ-ϕₐ,ρₚ-ϕₚ")
     axs[1].set_title("t = $(round(t_saves[j]; digits = 3))")
@@ -393,7 +405,7 @@ function test_vid_phase_pde_plot_1d(fig::Figure, axs, param::Dict{String,Any}, t
     #axs[1].axis(axlim)
     axs[2].set_xlabel("x")
     axs[2].set_ylabel("m")
-    axs[2].axis([0., 1., minimum(minimum.(mag_1d.(fa_saves; Nθ = Nθ))),maximum(maximum.(mag_1d.(fa_saves; Nθ = Nθ)))])
+    #axs[2].axis([0., 1., minimum(minimum.(mag_1d.(fa_saves; Nθ = Nθ))),maximum(maximum.(mag_1d.(fa_saves; Nθ = Nθ)))])
 
     axs[3].plot(t_saves, abs.(phasea_saves), color = "red", label = "Active")
     axs[3].plot(t_saves, abs.(phasep_saves), color = "black", label = "Passive")

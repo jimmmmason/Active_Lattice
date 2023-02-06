@@ -52,19 +52,24 @@ legend()
 display(fig)
 PyPlot.savefig("translation_invariance_ρ=$(ρ).pdf",dpi = 300, format = "pdf")
 #create vids
+T = 0.499
 @distributed for param ∈ params
     T = 0.5
-    t_saves, η_saves = load_etas(param, T; dump_interval = 0.001)
+    t_saves, η_saves = load_etas(param, T; dump_interval = 0.1)
     animate_etas(param,t_saves,η_saves)
 end
+t = 0.4
+η = η_saves[length(t_saves)]
 #load plots 
 PyPlot.close("all")
-fig = figure(figsize=(10,10))  
+fig, ax = figure(figsize=(10,10))  
 i =1
 name = "comparison"
-t = 1.5
+t = 0.499
 L = 128
+fig, ax = PyPlot.subplots(figsize =(10, 10))
 r = 7
+clf()
 for ρ in [0.7]
 for λ in λs
     ax = fig[:add_subplot](2,2,i)
@@ -88,7 +93,7 @@ for λ in λs
 end
 end
 display(fig)
-PyPlot.savefig("pic_phase_sep_parameter_range_L=$(L)_ρ =$(ρ)_Dθ=$(Dθ).pdf",dpi = 300, format = "pdf")
+PyPlot.savefig("active_passive_sim_example_2.pdf",dpi = 300, format = "pdf")
 # hist plot 
 PyPlot.close()
 fig = figure(figsize=(10,10))

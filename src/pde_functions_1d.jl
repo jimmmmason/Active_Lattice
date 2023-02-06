@@ -116,7 +116,7 @@ end
 function self_diff(ρ::Float64;logtol = 1e-10, γ = 0.0)
     α::Float64= π/2 -1;
     if ρ ≤  0.
-        ρ = logtol
+        ρ = 0.
     elseif ρ>1.
         ρ = 1.
     end
@@ -311,12 +311,21 @@ function perturb_pde_1d!(param::Dict{String,Any}, density::Dict{String,Any}; δ 
     end
     #from stability: 
     if pert == "n=1"
+        if ρp >0.
             K = collect(0:1:(k-1))
             matrix = ap_MathieuMatrix(ρa,ρp,Dx,Pe,Dθ; k=k, γ= γ)
             ω = 2*π
             a, A = ap_MathieuEigen(matrix)
             Pa = (x,θ) -> real.( dot(A[2:1:(k+1),k+1],cos.(θ*K*(2*π/Nθ)))*exp(-im*x*ω/Nx) )
             Pp = (x) -> real.(A[1,k+1]*exp(im*x*ω/Nx));
+        else
+            K = collect(0:1:(k-1))
+            matrix = a_MathieuMatrix(ρa,ρp,Dx,Pe,Dθ; k=k, γ= γ)
+            ω = 2*π
+            a, A = a_MathieuEigen(matrix)
+            Pa = (x,θ) -> real.( dot(A[:,k],cos.(θ*K*(2*π/Nθ)))*exp(-im*x*ω/Nx) )
+            Pp = (x) -> 0.;
+        end
     end
     if pert == "rand"
         Pa = (x,θ) -> δ*ρa*(( rand() - 0.5 )/(ρa+0.01))/(2*π);
@@ -347,6 +356,17 @@ function perturb_pde_run_1d(param)
     run_pde_until_1d!(param,density,T; save_on = true, max_steps = max_steps, save_interval = save_interval)
 end
 
+
+#=
+for i in 1:100
+pde_stepper_1d!(param,density)
+end
+fig, ax = PyPlot.subplots(figsize =(10, 10))
+@unpack fa, fp, t = density
+ax.plot(fa)
+display(fig)
+t
+=#
 ##
 #phase seperation metircs
 
