@@ -544,5 +544,66 @@ function mag_1d(fa; Nθ = 20)
     end
     return m
 end
+##
 
+
+function plot_sim_mag(fig::Figure, ax::PyObject, param::Dict{String,Any}, t; scale = "local", cbar = true)
+    @unpack name, L, λ, γ, ρa, ρp, Δt, Dθ = param
+    filename = "/store/DAMTP/jm2386/Active_Lattice/data/sims_pro/pol_save/r=$(r)_size=$(L)/t=$(round(t;digits=2))_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ)_Δt=$(Δt)_Dθ=$(Dθ).jld2"
+    data = wload(filename)
+    @unpack h = data
+    h = reshape(h,(L,L))
+    m = zeros(L,L,2)
+    for x in 1:K, y in 1:L
+        m[x,y,:] = h[x,y]
+    end
+    absmag  = sqrt.(m[:,:,1].^2+m[:,:,2].^2)
+    t = round(t; digits=5)
+    Δx = 1/L
+    ax.axis([Δx, 1., Δx, 1.])
+    ax.set_aspect("equal")
+    # Plot points
+    colmap = PyPlot.plt.cm.viridis_r
+    x = Δx:Δx:1
+    y = Δx:Δx:1
+    xx = [x̃ for x̃ ∈ x, ỹ ∈ y]'
+    yy = [ỹ for x̃ ∈ x, ỹ ∈ y]'
+    ax.streamplot(xx, yy, m[:,:,1]', m[:,:,2]', color = absmag', cmap = colmap, density = 1)#2.5
+    if scale == "local"
+        norm1 = matplotlib.colors.Normalize(vmin=minimum(absmag), vmax= maximum(absmag));
+    else
+        norm1 = matplotlib.colors.Normalize(vmin=scale[1], vmax= scale[2]);
+    end
+    if cbar
+        fig.colorbar(matplotlib.cm.ScalarMappable(norm=norm1, cmap = colmap), ax = ax, fraction = 0.0455)
+    end
+    #display(fig)
+    return fig
+end
+
+function plot_sim_mass(fig::Figure, ax::PyObject, param::Dict{String,Any},t; scale = "relative", cbar = true)
+    @unpack name, L, λ, γ, ρa, ρp, Δt, Dθ = param
+    filename = "/store/DAMTP/jm2386/Active_Lattice/data/sims_pro/hist_save/r=$(r)_size=$(L)/t=$(round(t;digits=2))_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ)_Δt=$(Δt)_Dθ=$(Dθ).jld2"
+    data = wload(filename)
+    @unpack h = data
+    ρ = reshape(h,(L,L))
+    #
+    t = round(t; digits=5)
+    Δx = 1/L
+    ax.axis([Δx, 1., Δx, 1.])
+    ax.set_aspect("equal")
+    # Plot points
+    colmap = PyPlot.plt.cm.viridis_r
+    if scale == "relative"
+        norm1 = matplotlib.colors.Normalize(vmin=0., vmax= 1.);
+    else
+        norm1 = matplotlib.colors.Normalize(vmin=minimum(ρ), vmax= maximum(ρ) );
+    end
+    ax.contourf(Δx:Δx:1, Δx:Δx:1,ρ'; levels = 25, norm = norm1, cmap = colmap )
+    if cbar
+        fig.colorbar(matplotlib.cm.ScalarMappable(norm=norm1, cmap = colmap), ax = ax, fraction = 0.0455)
+    end
+    #fig
+    return fig
+end 
 println("booted")

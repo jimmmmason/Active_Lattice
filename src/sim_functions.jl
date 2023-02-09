@@ -242,6 +242,25 @@ function load_etas(param::Dict{String,Any},T; dump_interval = 0.01, start_time= 
     end
     return t_saves, η_saves
 end
+
+function load_etas_1(param::Dict{String,Any},T; dump_interval = 0.01, start_time= 0.)
+    s = start_time
+    t_saves = []
+    η_saves = []
+    while s < T
+        try 
+            t = s
+            @unpack name, L, λ, γ, ρa, ρp, Δt, Dθ = param
+            filename = "/store/DAMTP/jm2386/Active_Lattice/data/sims_raw/$(name)/size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ)_Δt=$(Δt)_Dθ=$(Dθ)/time=$(round(t; digits = 3))_size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ)_Dθ=$(Dθ)/time=$(round(t; digits = 3))_size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ)_Dθ=$(Dθ)_#1.jld2";
+            η, t = wload(filename, "η", "t")
+            push!(t_saves,t)
+            push!(η_saves,η)
+        catch
+        end
+        s += dump_interval
+    end
+    return t_saves, η_saves
+end
 ##
 #visualise data
 using PyPlot, PyCall
@@ -292,7 +311,7 @@ function plot_eta(fig::Figure, ax::PyObject, param::Dict{String,Any}, t::Float64
         if title
             ax.set_title("ρₐ = $(ρa),  ρₚ = $(ρp), Pe = $(λ), t = $(t), Φ = $(Φ)")
         else
-            ax.set_title("Φ = $(Φ)")
+            #ax.set_title("Φ = $(Φ)")
         end
     # Plot points
     densities = reshape(local_density(η,L; r=r)',L^2)/(2*r+1)^2  #reshape(local_density(η,L; r=r),L^2) #local_polarisation(η,L; r=r)
@@ -563,13 +582,34 @@ function density_hist(param::Dict{String,Any}, η::Array{Float64,3}; r = 2)
     return local_density
 end
 
-function time_density_hist(fig::Figure, ax::PyObject, param::Dict{String,Any}, t_saves, η_saves; r = 3, bins = 3)
+function pol_hist(param::Dict{String,Any}, η::Array{Float64,3}; r = 2) 
+    @unpack name, L, λ, γ, ρa, ρp,  E, Δt, site_distribution, angles, rates = param
+    local_density = []
+    B = [[i,j] for i in (-r):1:r for j in (-r):1:r ]
+    for x₁ in 1:L, x₂ in 1:L
+        local ρr
+        ρr = 0.
+        for e ∈ B
+            y₁, y₂  = ([x₁, x₂] + e +[L-1,L-1]) .% L + [1,1]
+            θ= site_θ(η[y₁, y₂,: ])
+            ρr += [cos(θ) sin(θ)]/(2*r +1)^2
+        end
+        push!(local_density,ρr) 
+    end
+    return local_density
+end
+
+function time_density_hist(fig::Figure, ax::PyObject, param::Dict{String,Any}, t_saves, η_saves; r = 3, bins = 3, name= "label", add_label = false)
     h = [];
     for η ∈ η_saves
         append!(h, density_hist(param, η; r = r));
     end
     edges = collect((-1/(2*numbins)):(1/(numbins)):(1+(1/(2*numbins))))
-    ax.hist(h; bins = edges, histtype = "step", density = true)
+    if add_label
+        ax.hist(h; bins = edges, histtype = "step", density = true, label = name)
+    else
+        ax.hist(h; bins = edges, histtype = "step", density = true)
+    end
     ax.xaxis.set_ticks(0:0.5:1)
 end
 

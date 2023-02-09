@@ -119,10 +119,10 @@ params = []
         pert = "rand"
         T  = 4.0
         χ = 1.0
-for ρ in [0.7], Pe in [6., 8., 10., 12., 20.], Dθ in [4.], δ in [1e-2]
+for ρ in [0.7], Pe in [8., 10., 12., 20.], Dθ in [4.], δ in [1e-2]
         Nx = 128
         Nθ = 64
-        name = "article_rand_2d_δ=$(δ)"
+        name = "article_rand_actually_2d_δ=$(δ)"
         local param
                 #
                 param = pde_param_fraction(; name = name, 
@@ -135,11 +135,18 @@ for ρ in [0.7], Pe in [6., 8., 10., 12., 20.], Dθ in [4.], δ in [1e-2]
                 push!(params,param)
 end
 #run pdes
+pmap(perturb_pde_run, params; distributed = true, batch_size=1, on_error=nothing,)
+#
+
+
+
 pmap(load_pde_run, params; distributed = true, batch_size=1, on_error=nothing,)
 #make video
 pmap(make_video, params; distributed = true, batch_size=1, on_error=nothing,)
 #make_video_1d(params[1]; frames = 1000)
 ###
+
+
 
 ###
 #generic 2d unstable parameters

@@ -492,6 +492,57 @@ function load_pdes(param::Dict{String,Any},T; save_interval = 1., start_time = 0
     return t_saves, fa_saves, fp_saves
 end
 
+
+function load_pdes_rand(param::Dict{String,Any},T; save_interval = 1., start_time = 0., iterations = 5)
+    @unpack name, Nx, Nθ, λ, ρa, ρp, δt, Dθ = param
+    fa_saves = []
+    fp_saves = []
+    t_saves = []
+    i = 1
+    failed = false
+    while (failed == false)&(i<iterations)
+        t = start_time
+        while (t ≤ T)
+            try
+                if save_interval < 1e-4
+                    filename = "/store/DAMTP/jm2386/Active_Lattice/data/pde_raw/$(name)/Nx=$(Nx)_Nθ=$(Nθ)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_dt=$(δt)_Dθ=$(Dθ)/time=$(round(t; digits = 5))_Nx=$(Nx)_Nθ=$(Nθ)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_dt=$(δt)_Dθ=$(Dθ).jld2";
+                elseif save_interval < 0.01
+                    filename = "/store/DAMTP/jm2386/Active_Lattice/data/pde_raw/$(name)/Nx=$(Nx)_Nθ=$(Nθ)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_dt=$(δt)_Dθ=$(Dθ)/time=$(round(t; digits = 4))_Nx=$(Nx)_Nθ=$(Nθ)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_dt=$(δt)_Dθ=$(Dθ).jld2";
+                else
+                    filename = "/store/DAMTP/jm2386/Active_Lattice/data/pde_raw/$(name)/Nx=$(Nx)_Nθ=$(Nθ)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_dt=$(δt)_Dθ=$(Dθ)/time=$(round(t; digits = 2))_Nx=$(Nx)_Nθ=$(Nθ)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_dt=$(δt)_Dθ=$(Dθ).jld2";
+                end
+                data = wload(filename)
+                push!(t_saves,data["t"])
+                push!(fa_saves,data["fa"])
+                push!(fp_saves,data["fp"])
+            catch
+            end
+            t += save_interval
+        end
+        try
+            t = start_time
+            while (t ≤ T)
+                    if save_interval < 1e-4
+                        filename = "/store/DAMTP/jm2386/Active_Lattice/data/pde_raw/$(name)/Nx=$(Nx)_Nθ=$(Nθ)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_dt=$(δt)_Dθ=$(Dθ)/time=$(round(t; digits = 5))_Nx=$(Nx)_Nθ=$(Nθ)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_dt=$(δt)_Dθ=$(Dθ)_#$(i).jld2";
+                    elseif save_interval < 0.01
+                        filename = "/store/DAMTP/jm2386/Active_Lattice/data/pde_raw/$(name)/Nx=$(Nx)_Nθ=$(Nθ)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_dt=$(δt)_Dθ=$(Dθ)/time=$(round(t; digits = 4))_Nx=$(Nx)_Nθ=$(Nθ)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_dt=$(δt)_Dθ=$(Dθ)_#$(i).jld2";
+                    else
+                        filename = "/store/DAMTP/jm2386/Active_Lattice/data/pde_raw/$(name)/Nx=$(Nx)_Nθ=$(Nθ)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_dt=$(δt)_Dθ=$(Dθ)/time=$(round(t; digits = 2))_Nx=$(Nx)_Nθ=$(Nθ)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_dt=$(δt)_Dθ=$(Dθ)_#$(i).jld2";
+                    end
+                    data = wload(filename)
+                    push!(t_saves,data["t"])
+                    push!(fa_saves,data["fa"])
+                    push!(fp_saves,data["fp"])
+                t += save_interval
+            end
+            i += 1
+        catch
+            failed = true
+        end
+    end
+    return t_saves, fa_saves, fp_saves, i-1
+end
+
 # stability
 
 function λsym(ϕ::Float64; Dθ::Float64 = 10., Dx = 1.)

@@ -105,7 +105,7 @@ function a_lin_imaginary_fraction(ρ,χ; Dx =1. ,Pe = 20., Dθ =100.,k=40 )
 end
 #
 function find_stab_data(;stabdata = Dict{String,Any}(), ρs = 0.4:0.05:1.0, Pes = 5.:5.:100.,  param = param, save_on = true, t_end = 1.0, stab_type = "full", save_interval = 0.1)
-    @unpack Dθ, Nx, Nθ, χ, name,T,pert,k,δ,max_steps,save_interval,δt = param
+    @unpack Dθ, Nx, Nθ, χ, name,T,pert,k,δ,max_steps,δt = param
     λs = sqrt(Dθ)*Pes
     filename = "/store/DAMTP/jm2386/Active_Lattice/data/pde_pro/$(name)/stability_type=$(stab_type)_Nx=$(Nx)_Nθ=$(Nθ)_Dθ=$(Dθ)_χ=$(χ).jld2"
     
@@ -119,31 +119,34 @@ function find_stab_data(;stabdata = Dict{String,Any}(), ρs = 0.4:0.05:1.0, Pes 
     for ρ in ρs
         stable = []
         unstable = []
+        unclassified = []
         data = Dict{String,Any}()
         #load ans
         for λ ∈ λs
-            if (stab_type == "lin")&(λ ∉ stable)&(λ ∉ unstable)
+            if (stab_type == "lin")&(λ ∉ stable)&(λ ∉ unstable)&(λ ∉ unclassified)
                 try
-                    param = pde_param_fraction(; name = name, 
-                        ρ = ρ, Pe = λ/sqrt(Dθ), χ = χ, T = T, 
-                        Dθ = Dθ, δt = δt, Nx = Nx, Nθ = Nθ, 
-                        save_interval = save_interval, max_steps = max_steps,
-                        pert = pert, k =k, δ = δ
-                    )
-                    t_saves, fa_saves, fp_saves = load_pdes_1d(param,0.01; save_interval = 0.001, start_time = 0.0)
+                    local t_saves, fa_saves, fp_saves, stab_dsit0, stab_dsit1
+                        param = pde_param_fraction(; name = name, 
+                            ρ = ρ, Pe = λ/sqrt(Dθ), χ = χ, T = T, 
+                            Dθ = Dθ, δt = δt, Nx = Nx, Nθ = Nθ, 
+                            save_interval = save_interval, max_steps = max_steps,
+                            pert = pert, k =k, δ = δ
+                        )
+                        t_saves, fa_saves, fp_saves = load_pdes_1d(param,0.01; save_interval = 0.001, start_time = 0.0)
 
-                    stab_dsit0 = dist_from_unif_1d(param, fa_saves[1], fp_saves[1])
-                    stab_dsit1 = dist_from_unif_1d(param, fa_saves[2], fp_saves[2])
+                        stab_dsit0 = dist_from_unif_1d(param, fa_saves[1], fp_saves[1])
+                        stab_dsit1 = dist_from_unif_1d(param, fa_saves[2], fp_saves[2])
 
-                    if (stab_dsit0>stab_dsit1)&(λ ∉ stable)
-                        push!(stable, λ)
-                    elseif (λ ∉ unstable)
-                        push!(unstable, λ)
-                    end
+                        if (stab_dsit0>stab_dsit1)&(λ ∉ stable)
+                            push!(stable, λ)
+                        elseif (λ ∉ unstable)
+                            push!(unstable, λ)
+                        end
                 catch
                 end
-            elseif (stab_type == "full")&(λ ∉ stable)&(λ ∉ unstable)
-                try
+            elseif (stab_type == "full")&(λ ∉ stable)&(λ ∉ unstable)&(λ ∉ unclassified)
+                try     
+                        local t_saves, fa_saves, fp_saves, stab_dsit0, stab_dsit1, dist_saves, n, end_slope
                         param = pde_param_fraction(; name = name, 
                             ρ = ρ, Pe = λ/sqrt(Dθ), χ = χ, T = T, 
                             Dθ = Dθ, δt = δt, Nx = Nx, Nθ = Nθ, 
@@ -152,14 +155,19 @@ function find_stab_data(;stabdata = Dict{String,Any}(), ρs = 0.4:0.05:1.0, Pes 
                         )
                         t_saves, fa_saves, fp_saves = load_pdes_1d(param,t_end; save_interval = save_interval, start_time = 0.0)
                         dist_saves = time_dist_from_unif_1d(param, fa_saves, fp_saves)
+                        n = length(t_saves)
 
-                        stab_dsit0 = dist_from_unif_1d(param, fa_saves[1], fp_saves[1])
+                        stab_dsit0 = dist_saves[1]
                         stab_dsit1 = maximum(dist_saves)
 
-                        if (1.2*stab_dsit0>stab_dsit1)&(λ ∉ stable)
+                        end_slope = dist_saves[n] - dist_saves[n-1]
+
+                        if (5*stab_dsit0>stab_dsit1)&(λ ∉ stable)&(dist_saves<0)
                             push!(stable, λ)
-                        elseif (λ ∉ unstable)
+                        elseif (λ ∉ unstable)&(5*stab_dsit0<stab_dsit1)
                             push!(unstable, λ)
+                        else (λ ∉ unclassified)
+                            push!(unclassified, λ)
                         end
                 catch
                 end
@@ -189,8 +197,54 @@ function find_stab_data(;stabdata = Dict{String,Any}(), ρs = 0.4:0.05:1.0, Pes 
         end
         #fillout ans
         push!(stable,0.)
-        @pack! data = stable, unstable
+        @pack! data = stable, unstable, unclassified
         stabdata["ρ = $(ρ)"] = data
+    end
+
+    #fillout ans
+    stable = λs
+    unstable = []
+    data = Dict{String,Any}()
+    @pack! data = stable, unstable
+    stabdata["ρ = $(0.)"] = data
+    stabdata["ρ = $(1.)"] = data
+
+    if save_on
+        wsave(filename,stabdata)
+    end
+end
+function fillout_stab_data(;stabdata = Dict{String,Any}(), ρs = 0.4:0.05:1.0, Pes = 5.:5.:100.,  param = param, save_on = true, t_end = 1.0, stab_type = "full", save_interval = 0.1)
+    @unpack Dθ, Nx, Nθ, χ, name,T,pert,k,δ,max_steps,save_interval,δt = param
+    λs = sqrt(Dθ)*Pes
+    filename = "/store/DAMTP/jm2386/Active_Lattice/data/pde_pro/$(name)/stability_type=$(stab_type)_Nx=$(Nx)_Nθ=$(Nθ)_Dθ=$(Dθ)_χ=$(χ).jld2"
+    
+    if save_on
+        try 
+            stabdata = wload(filename)
+        catch
+        end
+    end
+
+    for ρ in ρs
+        try
+            local maxstab, minunstab
+            data =stabdata["ρ = $(ρ)"]
+            @unpack stable, unstable, unclassified = data
+            maxstab = maximum(stable)
+            minunstab = minimum(unstable)
+            for λ ∈ λs
+                if λ < minunstab
+                    push!(stable, λ)
+                elseif λ > maxstab
+                    push!(unstable, λ)
+                end
+            end
+            #fillout ans
+            data = Dict{String,Any}()
+            @pack! data = stable, unstable, unclassified
+            stabdata["ρ = $(ρ)"] = data
+        catch
+        end
     end
 
     #fillout ans
@@ -328,6 +382,37 @@ function pde_density_hist(fig::Figure, ax::PyObject, param::Dict{String,Any}, fa
     ax.hist(h; bins = edges, histtype = "step", density = true)
     ax.xaxis.set_ticks(0:0.25:1)
 end
+function pde_density_hist_av(fig::Figure, ax::PyObject, param::Dict{String,Any}, fa_saves, fp_saves; r =1, bins = 200, smoothing = false, add_label = false, name = "label")
+    @unpack Nx, Nθ, Pe = param
+    edges = collect(0.:(1/(bins)):1.0)
+    N = length(fa_saves)
+    H = []
+    for i in 1:N
+        fa = fa_saves[i]
+        fp = fp_saves[i]
+        ρ = fp + sum(fa; dims =3)[:,:,1].*(2*π/Nθ)
+        if smoothing
+            h = zeros(Nx,Nx)
+            B = [[i,j] for i in (-r):1:r for j in (-r):1:r ]
+            for x₁ in 1:Nx, x₂ in 1:Nx
+                for e in B
+                    y₁, y₂  = ([x₁, x₂] + e +[Nx-1,Nx-1]) .% Nx + [1,1]
+                    h[x₁,x₂] += ρ[y₁,y₂]/(2*r+1)^2
+                end
+            end
+            h = reshape(h, Nx*Nx)
+        else
+            h = reshape(ρ, Nx*Nx)
+        end
+        append!(H,h)
+    end
+    if add_label
+        ax.hist(H; bins = edges, histtype = "step", density = true, label = name)
+    else
+        ax.hist(H; bins = edges, histtype = "step", density = true)
+    end
+    ax.xaxis.set_ticks(0:0.2:1)
+end
 function pde_density_hist_1d(fig::Figure, ax::PyObject, param::Dict{String,Any}, fa, fp; r = 5, bins = 3)
     @unpack Nx, Nθ = param
     edges = collect(0.:(1/(bins)):1.0)
@@ -342,4 +427,92 @@ function pde_density_hist_1d(fig::Figure, ax::PyObject, param::Dict{String,Any},
     end
     ax.hist(h; bins = edges, histtype = "step", density = true)
     ax.xaxis.set_ticks(0:0.25:1)
+end
+function pde_density_hist_av_save(param::Dict{String,Any}, fa_saves, fp_saves; r =1, bins = 200, smoothing = false)
+    @unpack Nx, Nθ, Pe, name, ρa, ρp, λ, δt, Dθ = param
+    N = length(fa_saves)
+    H = []
+    for i in 1:N
+        fa = fa_saves[i]
+        fp = fp_saves[i]
+        ρ = fp + sum(fa; dims =3)[:,:,1].*(2*π/Nθ)
+        if smoothing
+            h = zeros(Nx,Nx)
+            B = [[i,j] for i in (-r):1:r for j in (-r):1:r ]
+            for x₁ in 1:Nx, x₂ in 1:Nx
+                for e in B
+                    y₁, y₂  = ([x₁, x₂] + e +[Nx-1,Nx-1]) .% Nx + [1,1]
+                    h[x₁,x₂] += ρ[y₁,y₂]/(2*r+1)^2
+                end
+            end
+            h = reshape(h, Nx*Nx)
+        else
+            h = reshape(ρ, Nx*Nx)
+        end
+        append!(H,h)
+    end
+    data = Dict{String,Any}()
+    @pack! data = H
+    @unpack Nx, Nθ, Pe, name, ρa, ρp, λ, δt, Dθ = param
+    filename = "/store/DAMTP/jm2386/Active_Lattice/data/pde_pro/av_hist/$(name)/Nx=$(Nx)_Nθ=$(Nθ)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_dt=$(δt)_Dθ=$(Dθ).jld2"
+    wsave(filename,data)
+end
+function pde_density_hist_av_load(fig::Figure, ax::PyObject, param::Dict{String,Any}; r =1, bins = 200, smoothing = false, add_label = false, label_name = "label")
+    @unpack Nx, Nθ, Pe = param
+    @unpack Nx, Nθ, Pe, name, ρa, ρp, λ, δt, Dθ = param
+    filename = "/store/DAMTP/jm2386/Active_Lattice/data/pde_pro/av_hist/$(name)/Nx=$(Nx)_Nθ=$(Nθ)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_dt=$(δt)_Dθ=$(Dθ).jld2"
+    data = wload(filename)
+    @unpack H = data
+    edges = collect(0.:(1/(bins)):1.0)
+    if add_label
+        ax.hist(H; bins = edges, histtype = "step", density = true, label = label_name)
+    else
+        ax.hist(H; bins = edges, histtype = "step", density = true)
+    end
+    ax.xaxis.set_ticks(0:0.2:1)
+end
+
+function time_density_hist_save(param::Dict{String,Any}, t_saves, η_saves; r = 3, bins = 3, name= "label", add_label = false)
+    h = [];
+    for η ∈ η_saves
+        append!(h, density_hist(param, η; r = r));
+    end
+    data = Dict{String,Any}()
+    @pack! data = h
+    @unpack name, L, λ, γ, ρa, ρp, Δt, Dθ = param
+    filename = "/store/DAMTP/jm2386/Active_Lattice/data/sims_pro/hist_save/r=$(r)_size=$(L)/active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ)_Δt=$(Δt)_Dθ=$(Dθ).jld2"
+    wsave(filename,data)
+end
+
+function time_density_hist_time_save(param::Dict{String,Any}, t, η; r = 3, bins = 3, name= "label", add_label = false)
+    h = [];
+    append!(h, density_hist(param, η; r = r));
+    data = Dict{String,Any}()
+    @pack! data = h
+    @unpack name, L, λ, γ, ρa, ρp, Δt, Dθ = param
+    filename = "/store/DAMTP/jm2386/Active_Lattice/data/sims_pro/hist_save/r=$(r)_size=$(L)/t=$(round(t;digits=2))_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ)_Δt=$(Δt)_Dθ=$(Dθ).jld2"
+    wsave(filename,data)
+end
+
+function time_density_polarisation_save(param::Dict{String,Any}, t, η; r = 3, bins = 3, name= "label", add_label = false)
+    h = [];
+    append!(h, pol_hist(param, η; r = r));
+    data = Dict{String,Any}()
+    @pack! data = h
+    @unpack name, L, λ, γ, ρa, ρp, Δt, Dθ = param
+    filename = "/store/DAMTP/jm2386/Active_Lattice/data/sims_pro/pol_save/r=$(r)_size=$(L)/t=$(round(t;digits=2))_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ)_Δt=$(Δt)_Dθ=$(Dθ).jld2"
+    wsave(filename,data)
+end
+
+function time_density_hist_load(fig::Figure, ax::PyObject,param::Dict{String,Any}; r = 3, bins = 3, label_name= "label", add_label = false)
+    @unpack name, L, λ, γ, ρa, ρp, Δt, Dθ = param
+    filename = "/store/DAMTP/jm2386/Active_Lattice/data/sims_pro/hist_save/r=$(r)_size=$(L)/active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ)_Δt=$(Δt)_Dθ=$(Dθ).jld2"
+    data = wload(filename)
+    @unpack h = data
+    edges = collect((-1/(2*bins)):(1/(bins)):(1+(1/(2*bins))))
+    if add_label
+        ax.hist(h; bins = edges, histtype = "step", density = true, label = label_name)
+    else
+        ax.hist(h; bins = edges, histtype = "step", density = true)
+    end
 end

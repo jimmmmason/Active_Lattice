@@ -27,9 +27,13 @@ exit
 addprocs([("refract",:auto)])
 addprocs([("radius",:auto)])
 addprocs([("teryas",4)])
-addprocs([("eloquence",10)])
-addprocs([("heart",4)])
-addprocs([("kenku",:auto)])
+addprocs([("eloquence",4)])
+addprocs([("heart",3)])
+addprocs([("kenku",3)])
+
+###
+@everywhere include("/home/jm2386/Active_Lattice/src/article_src.jl")
+###
 
 rmprocs()
 rmprocs([8,12,14])
