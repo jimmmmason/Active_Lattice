@@ -24,12 +24,12 @@ exit
 #addprocs([("cyllene",:auto)])
 #addprocs([("indium",:auto)])
 #addprocs([("orthosie",:auto)])
-addprocs([("refract",:auto)])
-addprocs([("radius",:auto)])
-addprocs([("teryas",4)])
-addprocs([("eloquence",4)])
+addprocs([("refract",3)])
+addprocs([("radius",3)])
+#addprocs([("teryas",6)])
+#addprocs([("eloquence",4)])
 addprocs([("heart",3)])
-addprocs([("kenku",3)])
+addprocs([("kenku",4)])
 
 ###
 @everywhere include("/home/jm2386/Active_Lattice/src/article_src.jl")

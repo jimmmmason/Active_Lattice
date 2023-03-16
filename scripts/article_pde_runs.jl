@@ -14,7 +14,7 @@ params = []
         T  = 4.0
         δ  = 1e-4
 #
-for ρ in [0.55], χ in [1.0], Pe in [12., 14., 16.], Dθ in [4.]
+for ρ in [0.5], χ in [1.0], Pe in [30., 20.], Dθ in [4.]
                 local param
                 #
                 name = "article_stability_active_5_1d_δ=$(δ)"
@@ -34,6 +34,7 @@ params = []
         δ  = 1e-4
 #
 name = "article_stability_10_1d_δ=$(δ)"
+#
 for ρ in collect(0.45:0.01:0.56), χ in [1.0], Pe in collect(10.:2.0:40.), Dθ in [4.]
         local param
         #
@@ -60,6 +61,19 @@ for ρ in collect(0.57:0.01:0.9), χ in [1.0], Pe in collect(6.:2.0:14.), Dθ in
 end
 #
 for ρ in collect(0.91:0.01:0.99), χ in [1.0], Pe in collect(6.:2.0:20.), Dθ in [4.]
+        local param
+        #
+        param = pde_param_fraction(; name = name, 
+                        ρ = ρ, Pe = Pe, χ = χ, T = T, 
+                        Dθ = Dθ, δt = 1e-5, Nx = 128, Nθ = 64, 
+                        save_interval = 0.01, max_steps = 1e7,
+                        pert = pert, k =40, δ = δ,
+                )
+        #
+        push!(params,param)
+end
+#
+for ρ in [0.7], χ in [1.0], Pe in collect(8.2:0.2:9.8), Dθ in [4.]
         local param
         #
         param = pde_param_fraction(; name = name, 
@@ -119,7 +133,27 @@ params = []
         pert = "rand"
         T  = 4.0
         χ = 1.0
-for ρ in [0.7], Pe in [8., 10., 12., 20.], Dθ in [4.], δ in [1e-2]
+for ρ in [0.5], Pe in [8., 10., 12., 20.], Dθ in [4.], δ in [1e-2]
+        Nx = 128
+        Nθ = 64
+        name = "article_rand_actually_2d_δ=$(δ)"
+        local param
+                #
+                param = pde_param_fraction(; name = name, 
+                        ρ = ρ, Pe = Pe, χ = χ, T = T, 
+                        Dθ = Dθ, δt = 1e-5, Nx = Nx, Nθ = Nθ, 
+                        save_interval = 1e-2, max_steps = 1e8,
+                        pert = pert, δ = δ, k = 40
+                )
+                #
+                push!(params,param)
+end
+#
+params = []
+        pert = "rand"
+        T  = 4.0
+        χ = 1.0
+for ρ in [0.5], Pe in [30.], Dθ in [4.], δ in [1e-2]
         Nx = 128
         Nθ = 64
         name = "article_rand_actually_2d_δ=$(δ)"
@@ -135,6 +169,8 @@ for ρ in [0.7], Pe in [8., 10., 12., 20.], Dθ in [4.], δ in [1e-2]
                 push!(params,param)
 end
 #run pdes
+pmap(load_dump_pde_run_homesave, params; distributed = true, batch_size=1, on_error=nothing,)
+#
 pmap(perturb_pde_run, params; distributed = true, batch_size=1, on_error=nothing,)
 #
 

@@ -162,11 +162,11 @@ function find_stab_data(;stabdata = Dict{String,Any}(), ρs = 0.4:0.05:1.0, Pes 
 
                         end_slope = dist_saves[n] - dist_saves[n-1]
 
-                        if (5*stab_dsit0>stab_dsit1)&(λ ∉ stable)&(dist_saves<0)
+                        if (2*stab_dsit0>stab_dsit1)&(λ ∉ stable)&(end_slope ≤ 1e-8)
                             push!(stable, λ)
-                        elseif (λ ∉ unstable)&(5*stab_dsit0<stab_dsit1)
+                        elseif (λ ∉ unstable)&(2*stab_dsit0<stab_dsit1)
                             push!(unstable, λ)
-                        else (λ ∉ unclassified)
+                        else (λ ∉ unclassified)&(λ ∉ stable)&(λ ∉ unstable)
                             push!(unclassified, λ)
                         end
                 catch
@@ -212,6 +212,7 @@ function find_stab_data(;stabdata = Dict{String,Any}(), ρs = 0.4:0.05:1.0, Pes 
     if save_on
         wsave(filename,stabdata)
     end
+    return stabdata
 end
 function fillout_stab_data(;stabdata = Dict{String,Any}(), ρs = 0.4:0.05:1.0, Pes = 5.:5.:100.,  param = param, save_on = true, t_end = 1.0, stab_type = "full", save_interval = 0.1)
     @unpack Dθ, Nx, Nθ, χ, name,T,pert,k,δ,max_steps,save_interval,δt = param
@@ -230,12 +231,12 @@ function fillout_stab_data(;stabdata = Dict{String,Any}(), ρs = 0.4:0.05:1.0, P
             local maxstab, minunstab
             data =stabdata["ρ = $(ρ)"]
             @unpack stable, unstable, unclassified = data
-            maxstab = maximum(stable)
             minunstab = minimum(unstable)
+            maxstab = maximum(stable)
             for λ ∈ λs
-                if λ < minunstab
+                if (λ < maxstab)&(λ ∉ stable)
                     push!(stable, λ)
-                elseif λ > maxstab
+                elseif (λ > minunstab)&(λ ∉ unstable)
                     push!(unstable, λ)
                 end
             end
@@ -258,15 +259,17 @@ function fillout_stab_data(;stabdata = Dict{String,Any}(), ρs = 0.4:0.05:1.0, P
     if save_on
         wsave(filename,stabdata)
     end
+    return stabdata
 end
 function plot_stab_frac(fig, ax, stabdata; ρs = 0.4:0.05:1.0 ,xs = collect(0.4:0.001:1.0), xtic = 0.4:0.2:1, ytic = 0:10:100, axlim = [0.4, 1., 0., 40.], param = param, χ = 0.5 )
     @unpack Dθ, Dx,ρp = param
     stable_points = []
     unstable_points = []
+    unclass_points = []
 
     for ρ in ρs
         try
-            @unpack stable, unstable = stabdata["ρ = $(ρ)"]
+            @unpack stable, unstable, unclassified = stabdata["ρ = $(ρ)"]
             for λ ∈ stable
                     append!(stable_points,  [ρ; λ/sqrt(Dθ)])
                     
@@ -274,12 +277,15 @@ function plot_stab_frac(fig, ax, stabdata; ρs = 0.4:0.05:1.0 ,xs = collect(0.4:
             for λ ∈ unstable
                     append!(unstable_points, [ρ; λ/sqrt(Dθ)])
             end
+            for λ ∈ unclassified
+                append!(unclass_points, [ρ; λ/sqrt(Dθ)])
+        end
         catch
         end
     end             
     stable_points   = reshape(stable_points, (2,Int64(length(stable_points)/2)) )
     unstable_points = reshape(unstable_points, (2,Int64(length(unstable_points)/2)) )
-    
+    unclass_points = reshape(unclass_points, (2,Int64(length(unclass_points)/2)) )
     #=
     n = length(xs)
     m = length(ys)
@@ -302,14 +308,22 @@ function plot_stab_frac(fig, ax, stabdata; ρs = 0.4:0.05:1.0 ,xs = collect(0.4:
         catch
         end
     end
-    ax.plot(X,Y,color = "black")
+    ax.plot(X,Y,color = "black", label = L"\mathrm{Linear}")
 
-    
+    ax.errorbar(unclass_points[1,:],unclass_points[2,:], 
+    #markersize = 400/L, 
+    fmt= "o", 
+    color = "purple",
+    alpha=0.8,
+    label = L"\mathrm{Unclassified}",
+    )
+
     ax.errorbar(stable_points[1,:],stable_points[2,:], 
     #markersize = 400/L, 
     fmt= "o", 
-    color = "green",
+    color = "blue",
     alpha=0.8,
+    label = L"\mathrm{Stable}",
     )
 
     ax.errorbar(unstable_points[1,:],unstable_points[2,:], 
@@ -317,6 +331,7 @@ function plot_stab_frac(fig, ax, stabdata; ρs = 0.4:0.05:1.0 ,xs = collect(0.4:
     fmt= "o", 
     color = "red",
     alpha=0.8,
+    label = L"\mathrm{Unstable}",
     )
 
     ax.xaxis.set_ticks(xtic)
@@ -428,7 +443,7 @@ function pde_density_hist_1d(fig::Figure, ax::PyObject, param::Dict{String,Any},
     ax.hist(h; bins = edges, histtype = "step", density = true)
     ax.xaxis.set_ticks(0:0.25:1)
 end
-function pde_density_hist_av_save(param::Dict{String,Any}, fa_saves, fp_saves; r =1, bins = 200, smoothing = false)
+function pde_density_hist_av_save(param::Dict{String,Any}, fa_saves, fp_saves; r =1, smoothing = false)
     @unpack Nx, Nθ, Pe, name, ρa, ρp, λ, δt, Dθ = param
     N = length(fa_saves)
     H = []
@@ -438,11 +453,12 @@ function pde_density_hist_av_save(param::Dict{String,Any}, fa_saves, fp_saves; r
         ρ = fp + sum(fa; dims =3)[:,:,1].*(2*π/Nθ)
         if smoothing
             h = zeros(Nx,Nx)
-            B = [[i,j] for i in (-r):1:r for j in (-r):1:r ]
+            B = [[i,j] for i in (-r):1:r for j in (-r):1:r ]#if (i^2+j^2) ≤ r^2]
+            n = length(B)
             for x₁ in 1:Nx, x₂ in 1:Nx
                 for e in B
                     y₁, y₂  = ([x₁, x₂] + e +[Nx-1,Nx-1]) .% Nx + [1,1]
-                    h[x₁,x₂] += ρ[y₁,y₂]/(2*r+1)^2
+                    h[x₁,x₂] += ρ[y₁,y₂]/n
                 end
             end
             h = reshape(h, Nx*Nx)
@@ -463,7 +479,7 @@ function pde_density_hist_av_load(fig::Figure, ax::PyObject, param::Dict{String,
     filename = "/store/DAMTP/jm2386/Active_Lattice/data/pde_pro/av_hist/$(name)/Nx=$(Nx)_Nθ=$(Nθ)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_dt=$(δt)_Dθ=$(Dθ).jld2"
     data = wload(filename)
     @unpack H = data
-    edges = collect(0.:(1/(bins)):1.0)
+    edges = collect((-1/(2*bins)):(1/(bins)):(1.0+(1/(2*bins))))
     if add_label
         ax.hist(H; bins = edges, histtype = "step", density = true, label = label_name)
     else
@@ -504,12 +520,17 @@ function time_density_polarisation_save(param::Dict{String,Any}, t, η; r = 3, b
     wsave(filename,data)
 end
 
-function time_density_hist_load(fig::Figure, ax::PyObject,param::Dict{String,Any}; r = 3, bins = 3, label_name= "label", add_label = false)
+function time_density_hist_load(fig::Figure, ax::PyObject,param::Dict{String,Any}; r = 3, bins = 3, label_name= "label", add_label = false, ignore_zero = false)
     @unpack name, L, λ, γ, ρa, ρp, Δt, Dθ = param
     filename = "/store/DAMTP/jm2386/Active_Lattice/data/sims_pro/hist_save/r=$(r)_size=$(L)/active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ)_Δt=$(Δt)_Dθ=$(Dθ).jld2"
     data = wload(filename)
     @unpack h = data
-    edges = collect((-1/(2*bins)):(1/(bins)):(1+(1/(2*bins))))
+    edges = []
+    if ignore_zero
+        edges = collect((1/(2*bins)):(1/(bins)):(1+(1/(2*bins))))
+    else
+        edges = collect((-1/(2*bins)):(1/(bins)):(1+(1/(2*bins))))
+    end
     if add_label
         ax.hist(h; bins = edges, histtype = "step", density = true, label = label_name)
     else

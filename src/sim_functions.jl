@@ -116,7 +116,7 @@ function model_step!(param::Dict{String,Any},model::Dict{String,Any})
             α = sum(w)
             #select jump
             jump  = sample(j, w)
-            #execute jumps
+            #execute jump
             η[jump[2]...,:], η[jump[1]...,:] = η[jump[1]...,:], η[jump[2]...,:]
             #update time
             δt += randexp()/α
@@ -216,6 +216,131 @@ function run_sim(param)
     println("success: χ = $(param["χ"]), ρ = $(param["ρ"]), Pe = $(param["Pe"])")
 end
 
+function run_sim_dump(param)
+    @unpack T, Δt = param
+    dump_interval = 0.01
+    model = initialize_model(param);
+    println("starting run: γ = $(param["γ"]), ρ = $(param["ρa"]), λ = $(param["λ"])")
+    while model["t"] < T
+        local t
+        t = deepcopy(model["t"]+dump_interval)
+        run_model_until!(param,model,t; save_on =false)
+            @unpack name, L, λ, γ, ρa, ρp, Δt, Dθ = param
+            @unpack η, t = model
+            filename = "/store/DAMTP/jm2386/Active_Lattice/data/sims_raw/$(name)/size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ)_Δt=$(Δt)_Dθ=$(Dθ)/time=$(round(t; digits = 3))_size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ)_Dθ=$(Dθ)/time=$(round(t; digits = 3))_size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ)_Dθ=$(Dθ).jld2";
+            data = Dict{String,Any}();
+            @pack! data = η, t
+            safesave(filename,data)
+    end
+    println("success: γ = $(param["γ"]), ρ = $(param["ρa"]), λ = $(param["λ"])")
+end
+
+
+
+function load_dump_sim_run(param)
+    @unpack T, save_interval, max_steps, pert, δ = param
+    s = T
+    i = 0
+    η = []
+    j = 0
+    t = 0.
+    while (0 ≤ s)&(j==0.) 
+        try
+            t = s
+            @unpack name, L, λ, γ, ρa, ρp, Δt, Dθ = param
+            filename = "/store/DAMTP/jm2386/Active_Lattice/data/sims_raw/$(name)/size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ)_Δt=$(Δt)_Dθ=$(Dθ)/time=$(round(t; digits = 3))_size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ)_Dθ=$(Dθ)/time=$(round(t; digits = 3))_size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ)_Dθ=$(Dθ).jld2";
+            η, t = wload(filename, "η", "t")
+            println("load success at t = $(s)")
+            i = 1
+            j = 1
+        catch
+            println("load failed at t = $(s)")
+        end
+        s -= 0.1
+    end
+    if i==1
+        println("loading success")
+        model = Dict{String,Any}()
+        @pack! model = η ,t
+        while model["t"] < T
+            local t
+            t = deepcopy(model["t"]+dump_interval)
+            run_model_until!(param,model,t; save_on =false)
+                @unpack name, L, λ, γ, ρa, ρp, Δt, Dθ = param
+                @unpack η, t = model
+                filename = "/store/DAMTP/jm2386/Active_Lattice/data/sims_raw/$(name)/size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ)_Δt=$(Δt)_Dθ=$(Dθ)/time=$(round(t; digits = 3))_size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ)_Dθ=$(Dθ)/time=$(round(t; digits = 3))_size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ)_Dθ=$(Dθ).jld2";
+                data = Dict{String,Any}();
+                @pack! data = η, t
+                safesave(filename,data)
+        end
+    else
+        println("loading failed")
+    end
+end
+
+function load_dump_sim_run_home_save(param)
+    @unpack  T, Δt = param
+    dump_interval = 0.01
+    s = T
+    i = 0
+    η = []
+    j = 0
+    t = 0.
+    while (0 ≤ s)&(j==0.) 
+        try
+            t = s
+            @unpack name, L, λ, γ, ρa, ρp, Δt, Dθ = param
+            filename = "/store/DAMTP/jm2386/Active_Lattice/data/sims_raw/$(name)/size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ)_Δt=$(Δt)_Dθ=$(Dθ)/time=$(round(t; digits = 3))_size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ)_Dθ=$(Dθ)/time=$(round(t; digits = 3))_size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ)_Dθ=$(Dθ).jld2";
+            η, t = wload(filename, "η", "t")
+            println("load success at t = $(s)")
+            i = 1
+            j = 1
+        catch
+            println("load failed at t = $(s)")
+        end
+        s -= 0.1
+    end
+    if i==1
+        println("loading success")
+        model = Dict{String,Any}()
+        @unpack name, L, D, λ, γ, ρa, ρp, Δt, E, site_distribution, angles, rates, Dθ = param
+        c = zeros(L,L,4)
+        j = fill([],(L,L,4))
+        for x₁ in 1:L, x₂ in 1:L 
+            for i in 1:4
+                local y
+                #find adjacent site
+                y₁, y₂  = ([x₁, x₂] + E[i] +[L-1,L-1]) .% L + [1,1]
+                #fill rates 
+                c[x₁, x₂ ,i] = rates(η[x₁, x₂,: ],η[y₁, y₂,: ],i)
+                #fill jump vectors
+                j[x₁, x₂ ,i] = [[x₁, x₂] ,[y₁, y₂]]
+            end
+        end
+        #pack into model
+        w     = weights( [(c...)...])
+        α = sum(c)
+        Δτ = Δt/α
+        @pack! model = η, w, j, t, α, Δτ
+        while model["t"] < T
+            local t
+            t = deepcopy(model["t"]+dump_interval)
+            run_model_until!(param,model,t; save_on =false)
+                @unpack name, L, λ, γ, ρa, ρp, Δt, Dθ = param
+                @unpack η, t = model
+                filename = "/home/jm2386/Active_Lattice/data/sims_raw/$(name)/size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ)_Δt=$(Δt)_Dθ=$(Dθ)/time=$(round(t; digits = 3))_size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ)_Dθ=$(Dθ)/time=$(round(t; digits = 3))_size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ)_Dθ=$(Dθ).jld2";
+                data = Dict{String,Any}();
+                @pack! data = η, t
+                safesave(filename,data)
+        end
+    else
+        println("loading failed")
+    end
+end
+
+
+
+
 function run_sim_old(param)
     @unpack T, Δt = param
     model = initialize_model(param);
@@ -258,6 +383,45 @@ function load_etas_1(param::Dict{String,Any},T; dump_interval = 0.01, start_time
         catch
         end
         s += dump_interval
+    end
+    return t_saves, η_saves
+end
+
+function load_etas_av(param::Dict{String,Any},T; dump_interval = 0.01, start_time= 0., trials = 10)
+    s = start_time
+    t_saves = []
+    η_saves = []
+    no_abort = true
+    while s < T
+        try 
+            t = s
+            @unpack name, L, λ, γ, ρa, ρp, Δt, Dθ = param
+            filename = "/store/DAMTP/jm2386/Active_Lattice/data/sims_raw/$(name)/size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ)_Δt=$(Δt)_Dθ=$(Dθ)/time=$(round(t; digits = 3))_size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ)_Dθ=$(Dθ)/time=$(round(t; digits = 3))_size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ)_Dθ=$(Dθ)_#1.jld2";
+            η, t = wload(filename, "η", "t")
+            push!(t_saves,t)
+            push!(η_saves,η)
+        catch
+        end
+        for i in 1:(trials-1)
+            try 
+                t = s
+                @unpack name, L, λ, γ, ρa, ρp, Δt, Dθ = param
+                filename = "/store/DAMTP/jm2386/Active_Lattice/data/sims_raw/$(name)/size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ)_Δt=$(Δt)_Dθ=$(Dθ)/time=$(round(t; digits = 3))_size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ)_Dθ=$(Dθ)/time=$(round(t; digits = 3))_size=$(L)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_gamma=$(γ)_Dθ=$(Dθ)_#$(i).jld2";
+                η, t = wload(filename, "η", "t")
+                push!(t_saves,t)
+                push!(η_saves,η)
+            catch
+                println("only $(i) trials at t = $(s), aborting...")
+                s = T
+                no_abort = false
+            end
+        end
+        s += dump_interval
+    end
+    if no_abort
+        l = Int64(length(t_saves)/(trials))
+        t_saves = reshape(t_saves,(trials,l))
+        η_saves = reshape(η_saves,(trials,l))
     end
     return t_saves, η_saves
 end
@@ -569,13 +733,14 @@ end
 function density_hist(param::Dict{String,Any}, η::Array{Float64,3}; r = 2) 
     @unpack name, L, λ, γ, ρa, ρp,  E, Δt, site_distribution, angles, rates = param
     local_density = []
-    B = [[i,j] for i in (-r):1:r for j in (-r):1:r ]
+    B = [[i,j] for i in (-r):1:r for j in (-r):1:r ]#if (i^2+j^2) ≤ r^2]
+    n = length(B)
     for x₁ in 1:L, x₂ in 1:L
         local ρr 
         ρr = 0.
         for e ∈ B
             y₁, y₂  = ([x₁, x₂] + e +[L-1,L-1]) .% L + [1,1]
-            ρr += site_ρ(η[y₁, y₂,: ])/(2*r +1)^2
+            ρr += site_ρ(η[y₁, y₂,: ])/n
         end
         push!(local_density,ρr) 
     end
@@ -588,11 +753,14 @@ function pol_hist(param::Dict{String,Any}, η::Array{Float64,3}; r = 2)
     B = [[i,j] for i in (-r):1:r for j in (-r):1:r ]
     for x₁ in 1:L, x₂ in 1:L
         local ρr
-        ρr = 0.
+        ρr = [0., 0.]
         for e ∈ B
             y₁, y₂  = ([x₁, x₂] + e +[L-1,L-1]) .% L + [1,1]
             θ= site_θ(η[y₁, y₂,: ])
-            ρr += [cos(θ) sin(θ)]/(2*r +1)^2
+            if θ == false
+            else
+                ρr += [cos(θ), sin(θ)]/(2*r +1)^2
+            end
         end
         push!(local_density,ρr) 
     end

@@ -141,7 +141,21 @@ Pe = 3.
 Dθ = 100.
 Dx = 1.
 
+ρa = 0.6
+ρp = 0.
 
+m1 = a_MathieuMatrix(ρa,ρp,Dx,Pe,Dθ; k =2)
+v = eigvals(m1)[2]
+_, V = eigen(m1)
+v1 = V[:,2]
+
+v1' *m1 *v1 / (v1' *v1)
+
+v2 = push!(v1,0.)
+m2 = a_MathieuMatrix(ρa,ρp,Dx,Pe,Dθ; k =3)
+eigvals(m2)
+
+v2' *m2 *v2 / (v2' *v2)
 
 @unpack Dθ, Dx, ρp, ρa, Pe = param
 k = 10
@@ -150,6 +164,11 @@ a, A = ap_MathieuEigen(matrix)
 hcat(A[:,k+1],A[:,k])
 
 hcat(A[:,k+1]/A[2,k+1],A[:,k]/A[2,k])
+
+
+matrix = [ 10 + im 0 0; 0 -1 0 ;  0 0 2]
+eigvals(matrix)
+
 
 
 

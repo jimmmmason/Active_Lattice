@@ -17,8 +17,8 @@ params = []
         #using Roots
         #f(x) = lin_stab_line_fraction(x,χ; Dx =1. ,Pe = 20., Dθ =100.,k=40 )
         #root = find_zero(f, (0.6,  0.8))
-for ρ in [0.7], Pe in [8.,10.,12.], Dθ in [4.], L in [32,64,128]
-        name = "article_sim_safe"
+for ρ in [0.5], Pe in [20.,30.], Dθ in [4.], L in [128]
+        name = "article_sim_data_fig_7"
         local param
                 #
                 param = sim_param_fraction(; name = name, 
@@ -30,7 +30,7 @@ for ρ in [0.7], Pe in [8.,10.,12.], Dθ in [4.], L in [32,64,128]
 end
 #
 #run sims
-pmap(run_sim, params; distributed = true, batch_size=1, on_error=nothing,)
+pmap(load_dump_sim_run_home_save, params; distributed = true, batch_size=1, on_error=nothing,)
 #make video
 pmap(make_sim_vid, params; distributed = true, batch_size=1, on_error=nothing,)
 #

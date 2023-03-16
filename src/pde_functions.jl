@@ -447,6 +447,124 @@ function load_pde_run(param)
     end
 end
 
+function load_dump_pde_run(param)
+    @unpack T, save_interval, max_steps, pert, δ = param
+    s = T
+    i = 0
+    fa = []
+    fp = []
+    j = 0
+    t = 0.
+    while (0 ≤ s)&(j==0.) 
+        try
+            t_saves, fa_saves, fp_saves = load_pdes(param,s; save_interval = 0.01, start_time = s-0.01)
+            fa = fa_saves[1]
+            fp = fp_saves[1]
+            t = t_saves[1]
+            println("load success at t = $(s)")
+            i = 1
+            j = 1
+        catch
+            println("load failed at t = $(s)")
+        end
+        s -= 0.1
+    end
+    if i==1
+        println("loading success")
+        density = Dict{String,Any}()
+        @pack! density = fa, fp ,t
+        run_pde_until!(param,density,T; save_on = true, max_steps = max_steps, save_interval = save_interval)
+    else
+        println("loading failed")
+    end
+end
+
+function load_dump_pde_run_homesave(param)
+    @unpack T, save_interval, max_steps, pert, δ = param
+    s = T
+    i = 0
+    fa = []
+    fp = []
+    j = 0
+    t = 0.
+    while (0 ≤ s)&(j==0.) 
+        try
+            t_saves, fa_saves, fp_saves = load_pdes(param,s; save_interval = 0.01, start_time = s-0.01)
+            fa = fa_saves[1]
+            fp = fp_saves[1]
+            t = t_saves[1]
+            println("load success at t = $(s)")
+            i = 1
+            j = 1
+        catch
+            println("load failed at t = $(s)")
+        end
+        s -= 0.1
+    end
+    if i==1
+        println("loading success")
+        density = Dict{String,Any}()
+        @pack! density = fa, fp ,t
+        run_pde_until_homesave!(param,density,T; save_on = true, max_steps = max_steps, save_interval = save_interval)
+    else
+        println("loading failed")
+    end
+end
+
+function run_pde_until_homesave!(param::Dict{String,Any},density::Dict{String,Any},T; save_on =false, max_steps = 100, save_interval = 1.)
+    @unpack name, Nx, Nθ, λ, ρa, ρp, δt, Dθ = param
+    if save_on
+        @unpack t = density
+        filename = "/home/jm2386/Active_Lattice/data/pde_raw/$(name)/Nx=$(Nx)_Nθ=$(Nθ)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_dt=$(δt)_Dθ=$(Dθ)/time=$(round(t; digits = 2))_Nx=$(Nx)_Nθ=$(Nθ)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_dt=$(δt)_Dθ=$(Dθ).jld2";
+        safesave(filename,density)
+    end
+    if max_steps == false
+        while density["t"] < T 
+                time_since_save = 0.
+                while time_since_save < min(save_interval, T)
+                    dt = pde_stepper!(param,density)
+                    time_since_save += dt 
+                end
+                if save_on
+                    if save_interval < 1e-4
+                        filename = "/home/jm2386/Active_Lattice/data/pde_raw/$(name)/Nx=$(Nx)_Nθ=$(Nθ)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_dt=$(δt)_Dθ=$(Dθ)/time=$(round(t; digits = 5))_Nx=$(Nx)_Nθ=$(Nθ)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_dt=$(δt)_Dθ=$(Dθ).jld2";
+                        safesave(filename,density)
+                    elseif save_interval < 0.01
+                        filename = "/home/jm2386/Active_Lattice/data/pde_raw/$(name)/Nx=$(Nx)_Nθ=$(Nθ)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_dt=$(δt)_Dθ=$(Dθ)/time=$(round(t; digits = 4))_Nx=$(Nx)_Nθ=$(Nθ)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_dt=$(δt)_Dθ=$(Dθ).jld2";
+                        safesave(filename,density)
+                    else
+                        filename = "/home/jm2386/Active_Lattice/data/pde_raw/$(name)/Nx=$(Nx)_Nθ=$(Nθ)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_dt=$(δt)_Dθ=$(Dθ)/time=$(round(t; digits = 2))_Nx=$(Nx)_Nθ=$(Nθ)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_dt=$(δt)_Dθ=$(Dθ).jld2";
+                        safesave(filename,density)
+                    end
+                end
+            end
+    else
+        steps ::Int64 = 0
+        while (density["t"] < T)&(steps < max_steps)
+            time_since_save = 0.
+            while (time_since_save < min(save_interval, T))&(steps < max_steps)
+                dt = pde_stepper!(param,density)
+                time_since_save += dt 
+                steps += 1
+            end
+            if save_on
+                @unpack t = density
+                if save_interval < 1e-4
+                    filename = "/home/jm2386/Active_Lattice/data/pde_raw/$(name)/Nx=$(Nx)_Nθ=$(Nθ)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_dt=$(δt)_Dθ=$(Dθ)/time=$(round(t; digits = 5))_Nx=$(Nx)_Nθ=$(Nθ)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_dt=$(δt)_Dθ=$(Dθ).jld2";
+                    safesave(filename,density)
+                elseif save_interval < 0.01
+                    filename = "/home/jm2386/Active_Lattice/data/pde_raw/$(name)/Nx=$(Nx)_Nθ=$(Nθ)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_dt=$(δt)_Dθ=$(Dθ)/time=$(round(t; digits = 4))_Nx=$(Nx)_Nθ=$(Nθ)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_dt=$(δt)_Dθ=$(Dθ).jld2";
+                    safesave(filename,density)
+                else
+                    filename = "/home/jm2386/Active_Lattice/data/pde_raw/$(name)/Nx=$(Nx)_Nθ=$(Nθ)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_dt=$(δt)_Dθ=$(Dθ)/time=$(round(t; digits = 2))_Nx=$(Nx)_Nθ=$(Nθ)_active=$(ρa)_passive=$(ρp)_lamb=$(λ)_dt=$(δt)_Dθ=$(Dθ).jld2";
+                    safesave(filename,density)
+                end
+            end
+        end
+        return steps
+    end
+end
+
 ##
 #phase seperation metircs
 
