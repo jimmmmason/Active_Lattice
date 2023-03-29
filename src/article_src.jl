@@ -261,6 +261,98 @@ function fillout_stab_data(;stabdata = Dict{String,Any}(), ρs = 0.4:0.05:1.0, P
     end
     return stabdata
 end
+function fillout_stab_data_horizontal(;stabdata = Dict{String,Any}(), ρs = 0.0:0.05:1.0, Pes = 5.:5.:100.,  param = param, save_on = true, t_end = 1.0, stab_type = "full", save_interval = 0.1)
+    @unpack Dθ, Nx, Nθ, χ, name,T,pert,k,δ,max_steps,save_interval,δt = param
+    λs = sqrt(Dθ)*Pes
+    filename = "/store/DAMTP/jm2386/Active_Lattice/data/pde_pro/$(name)/stability_type=$(stab_type)_Nx=$(Nx)_Nθ=$(Nθ)_Dθ=$(Dθ)_χ=$(χ).jld2"
+    
+    if save_on
+        try 
+            stabdata = wload(filename)
+        catch
+        end
+    end
+
+    for ρ in ρs
+        if ρ ≤ 0.45
+        try
+            local maxstab
+            data =stabdata["ρ = 0.45"]
+            @unpack stable, unstable, unclassified = data
+            maxstab = maximum(stable)
+            for λ ∈ λs
+                if (λ ≤ maxstab)&(λ ∉ stable)
+                    push!(stable, λ)
+                end
+            end
+            #fillout ans
+            data = Dict{String,Any}()
+            @pack! data = stable, unstable, unclassified
+            stabdata["ρ = $(ρ)"] = data
+        catch
+            local maxstab
+            data =stabdata["ρ = 0.45"]
+            @unpack stable, unstable, unclassified = data
+            maxstab = maximum(stable)
+            for λ ∈ λs
+                if (λ ≤ maxstab)&(λ ∉ stable)
+                    push!(stable, λ)
+                end
+            end
+            #fillout ans
+            data = Dict{String,Any}()
+            @pack! data = stable, unstable, unclassified
+            merge!(stabdata,Dict{String,Any}("ρ = $(ρ)"=>data))
+        end
+        end
+    end
+
+    if save_on
+        wsave(filename,stabdata)
+    end
+    return stabdata
+end
+function find_extreme_params(param,stabdata; ρs = 0.4:0.05:1.0)
+    @unpack k, name, D, δt, Nx, Nθ, S, E, Dθ, T, save_interval, max_steps, max_runs, pert, δ, Pe, Dx, γ, χ = param
+    params = []
+    for ρ in ρs
+        try
+            local maxstab, minunstab
+            data =stabdata["ρ = $(ρ)"]
+            @unpack stable, unstable, unclassified = data
+            minunstab = minimum(unstable)/sqrt(Dθ)
+            maxstab = maximum(stable)/sqrt(Dθ)
+
+            param_min = pde_param_fraction(; name = name, 
+                ρ = ρ, Pe = minunstab, χ = χ, T = T, 
+                Dθ = Dθ, δt = δt, Nx = Nx,Nθ = Nθ,
+                save_interval = save_interval, max_steps = max_steps,
+                pert = pert, k =k, δ = δ,
+            )
+            param_max = pde_param_fraction(; name = name, 
+            ρ = ρ, Pe = maxstab, χ = χ, T = T, 
+            Dθ = Dθ, δt = δt, Nx = Nx, Nθ = Nθ,
+            save_interval = save_interval, max_steps = max_steps,
+            pert = pert, k =k, δ = δ,
+            )
+            push!(params,param_min)
+            push!(params,param_max)
+            
+            for λ in unclassified
+                Pe = λ/sqrt(Dθ)
+                param_unlcass = pde_param_fraction(; name = name, 
+                ρ = ρ, Pe = Pe, χ = χ, T = T, 
+                Dθ = Dθ, δt = δt, Nx = Nx, Nθ = Nθ, 
+                save_interval = save_interval, max_steps = max_steps,
+                pert = pert, k =k, δ = δ,
+                )
+                push!(params,param_unlcass)
+            end
+        catch
+        end
+    end
+    return params
+end
 function plot_stab_frac(fig, ax, stabdata; ρs = 0.4:0.05:1.0 ,xs = collect(0.4:0.001:1.0), xtic = 0.4:0.2:1, ytic = 0:10:100, axlim = [0.4, 1., 0., 40.], param = param, χ = 0.5 )
     @unpack Dθ, Dx,ρp = param
     stable_points = []
@@ -278,6 +370,7 @@ function plot_stab_frac(fig, ax, stabdata; ρs = 0.4:0.05:1.0 ,xs = collect(0.4:
                     append!(unstable_points, [ρ; λ/sqrt(Dθ)])
             end
             for λ ∈ unclassified
+                #append!(unstable_points, [ρ; λ/sqrt(Dθ)])
                 append!(unclass_points, [ρ; λ/sqrt(Dθ)])
         end
         catch
@@ -317,6 +410,7 @@ function plot_stab_frac(fig, ax, stabdata; ρs = 0.4:0.05:1.0 ,xs = collect(0.4:
     alpha=0.8,
     label = L"\mathrm{Unclassified}",
     )
+
 
     ax.errorbar(stable_points[1,:],stable_points[2,:], 
     #markersize = 400/L, 

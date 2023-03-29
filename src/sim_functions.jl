@@ -238,7 +238,8 @@ end
 
 
 function load_dump_sim_run(param)
-    @unpack T, save_interval, max_steps, pert, δ = param
+    @unpack  T, Δt = param
+    dump_interval = 0.01
     s = T
     i = 0
     η = []
@@ -261,7 +262,25 @@ function load_dump_sim_run(param)
     if i==1
         println("loading success")
         model = Dict{String,Any}()
-        @pack! model = η ,t
+        @unpack name, L, D, λ, γ, ρa, ρp, Δt, E, site_distribution, angles, rates, Dθ = param
+        c = zeros(L,L,4)
+        j = fill([],(L,L,4))
+        for x₁ in 1:L, x₂ in 1:L 
+            for i in 1:4
+                local y
+                #find adjacent site
+                y₁, y₂  = ([x₁, x₂] + E[i] +[L-1,L-1]) .% L + [1,1]
+                #fill rates 
+                c[x₁, x₂ ,i] = rates(η[x₁, x₂,: ],η[y₁, y₂,: ],i)
+                #fill jump vectors
+                j[x₁, x₂ ,i] = [[x₁, x₂] ,[y₁, y₂]]
+            end
+        end
+        #pack into model
+        w     = weights( [(c...)...])
+        α = sum(c)
+        Δτ = Δt/α
+        @pack! model = η, w, j, t, α, Δτ
         while model["t"] < T
             local t
             t = deepcopy(model["t"]+dump_interval)

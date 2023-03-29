@@ -73,7 +73,12 @@ for ρ in collect(0.91:0.01:0.99), χ in [1.0], Pe in collect(6.:2.0:20.), Dθ i
         push!(params,param)
 end
 #
-for ρ in [0.7], χ in [1.0], Pe in collect(8.2:0.2:9.8), Dθ in [4.]
+params = []
+        pert = "n=1"
+        T  = 4.0
+        δ  = 1e-4
+name = "article_stability_L2norm_1d_δ=$(δ)"
+for ρ in [0.7], χ in [1.0], Pe in collect(8.1:0.1:9.9), Dθ in [4.]
         local param
         #
         param = pde_param_fraction(; name = name, 
@@ -85,6 +90,10 @@ for ρ in [0.7], χ in [1.0], Pe in collect(8.2:0.2:9.8), Dθ in [4.]
         #
         push!(params,param)
 end
+param = params[1]
+params = find_extreme_params(param,stabdata; ρs = 0.4:0.01:1.0)
+params[1]
+params[2]
 #run pdes
 pmap(perturb_pde_run_1d, params; distributed = true, batch_size=1, on_error=nothing,)
 ###
@@ -169,7 +178,7 @@ for ρ in [0.5], Pe in [30.], Dθ in [4.], δ in [1e-2]
                 push!(params,param)
 end
 #run pdes
-pmap(load_dump_pde_run_homesave, params; distributed = true, batch_size=1, on_error=nothing,)
+pmap(load_dump_pde_run, params; distributed = true, batch_size=1, on_error=nothing,)
 #
 pmap(perturb_pde_run, params; distributed = true, batch_size=1, on_error=nothing,)
 #

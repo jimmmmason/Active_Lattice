@@ -30,6 +30,8 @@ addprocs([("radius",3)])
 #addprocs([("eloquence",4)])
 addprocs([("heart",3)])
 addprocs([("kenku",4)])
+addprocs([("leona",3)])
+addprocs([("saz",3)])
 
 ###
 @everywhere include("/home/jm2386/Active_Lattice/src/article_src.jl")

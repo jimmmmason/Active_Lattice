@@ -49,7 +49,7 @@ fig, ax = fig, ax = PyPlot.subplots(figsize =(10, 10))
     ax.yaxis.set_tick_params(labelsize=15)
     ax.axis(axlim)
     ax.set_title(L"\Re{ \lambda_n^\mathrm{max}} = 0",fontsize=20)
-    ax.set_xlabel(L"\rho",fontsize=20)
+    ax.set_xlabel(L"\phi",fontsize=20)
     ax.set_ylabel(L"\mathrm{Pe}", fontsize=20)
     ax.legend(loc = "upper left", fontsize=20)
     #ax.set_title("ℓ = $(1/sqrt(Dθ))")
@@ -88,7 +88,7 @@ param = pde_param_fraction(; name = name,
                 #
 #
 #t_saves, fa_saves, fp_saves = load_pdes_rand(param,2.0; save_interval = 1.0, start_time = 0.0)
-t_saves, fa_saves, fp_saves = load_pdes(param,2.0; save_interval = 1.0, start_time = 0.0)
+t_saves, fa_saves, fp_saves = load_pdes(param,2.0; save_interval = 0.4, start_time = 0.0)
 #
 rc("text", usetex=true)
 fig, axs = plt.subplots(2, 3, figsize=(15,10), constrained_layout = true)
@@ -225,12 +225,30 @@ for ρ in [0.7], χ in [1.0], Pe in collect(8.2:0.2:9.8), Dθ in [4.]
     push!(params,param)
 end
 #
+params = []
+        pert = "n=1"
+        T  = 4.0
+        δ  = 1e-4
+name = "article_stability_L2norm_1d_δ=$(δ)"
+for ρ in [0.7], χ in [1.0], Pe in collect(8.:0.1:9.), Dθ in [4.]
+        local param
+        #
+        param = pde_param_fraction(; name = name, 
+                        ρ = ρ, Pe = Pe, χ = χ, T = T, 
+                        Dθ = Dθ, δt = 1e-5, Nx = 128, Nθ = 64, 
+                        save_interval = 0.01, max_steps = 1e7,
+                        pert = pert, k =40, δ = δ,
+                )
+        #
+        push!(params,param)
+end
+#
 rc("text", usetex=true)
 fig, ax = plt.subplots(1, 1, figsize=(10,10))
 #ax.plot(fa_saves[1])
 #display(fig)
 #i=1
-for i in 1:5
+for i in 1:11
     param = params[i]
     @unpack ρ, Pe, χ, Dθ = param
     t_saves, fa_saves, fp_saves = load_pdes(param,T; save_interval = 0.01)
@@ -244,7 +262,7 @@ ax.axis([0., 2.0 ,0., .0004 ],fontsize=15)
     ax.xaxis.set_tick_params(labelsize=15)
     ax.yaxis.set_tick_params(labelsize=15)
     ax.set_xlabel(L"t", fontsize=20)
-    ax.set_ylabel(L"\Vert \rho - \phi \Vert_{H_2}", fontsize=20)
+    ax.set_ylabel(L"\Vert \rho - \phi \Vert_{L_2}", fontsize=20)
     title = latexstring(
         "\$ \\ell  =  $(1/sqrt(Dθ))\$, \$ \\phi =  $(ρ) \$"
     )
@@ -268,7 +286,7 @@ params = []
         pert = "n=1"
         T  = 1.0
         δ  = 1e-4
-        name = "article_stability_10_1d_δ=$(δ)"
+        name = "article_stability_L2norm_1d_δ=$(δ)"
         Nx = 128
         Nθ = 64
         χ = 1.
@@ -286,36 +304,42 @@ for ρ in [0.7], χ in [1.0], Pe in [6.], Dθ in [4.]
 end
 param = params[1]
 #
-ρs = collect(0.45:0.01:1.0)
+ρs = collect(0.0:0.01:1.0)
 Pes = 2.:2.:40.
+Dθ = 4.0
 stab_type = "full"
 stabdata = find_stab_data(;stabdata = Dict{String,Any}(), ρs = ρs, Pes = Pes,  param = param, save_on = true, t_end = 4.0, stab_type = stab_type, save_interval = 0.25)
 #
 filename = "/store/DAMTP/jm2386/Active_Lattice/data/pde_pro/$(name)/stability_type=$(stab_type)_Nx=$(Nx)_Nθ=$(Nθ)_Dθ=$(Dθ)_χ=$(χ).jld2"
 stabdata = wload(filename)
 stabdata = fillout_stab_data(;stabdata = stabdata, ρs = ρs, Pes = Pes,  param = param, save_on = true, t_end = 4.0, stab_type = stab_type, save_interval = 0.25)
+stabdata = fillout_stab_data_horizontal(;stabdata = stabdata, ρs = ρs, Pes = Pes,  param = param, save_on = true, t_end = 4.0, stab_type = stab_type, save_interval = 0.25)
+#
 #
 χ = 1.0
+rc("text", usetex=true)
 xs = append!(append!(collect(0.401:0.001:0.99),collect(0.99:0.0001:0.9999)),collect(0.4:0.00001:0.401))
 fig, ax = PyPlot.subplots(figsize =(10, 10))
     filename = "/store/DAMTP/jm2386/Active_Lattice/data/pde_pro/$(name)/stability_type=$(stab_type)_Nx=$(Nx)_Nθ=$(Nθ)_Dθ=$(Dθ)_χ=$(χ).jld2"
     stabdata = wload(filename)
     plot_stab_frac(fig, ax, stabdata; xs=xs, ρs = ρs, xtic = 0.4:0.1:1.0,  axlim = [minimum(ρs), maximum(ρs), minimum(Pes), maximum(Pes)], param = param, χ = χ)
-    xtic = 0.5:0.1:1
+    xtic = 0.0:0.1:1
     ytic = 0:10:100
-    axlim = [0.45, 1., 0., 40.]
+    axlim = [0.4, 1., 0., 40.]
     ax.xaxis.set_ticks(xtic)
     ax.yaxis.set_ticks(ytic)
     ax.xaxis.set_tick_params(labelsize=15)
     ax.yaxis.set_tick_params(labelsize=15)
     ax.axis(axlim)
     #ax.set_title(L"\lambda_n = 0",fontsize=20)
-    ax.set_xlabel(L"\rho",fontsize=20)
+    ax.set_xlabel(L"\phi",fontsize=20)
     ax.set_ylabel(L"\mathrm{Pe}", fontsize=20)
     ax.legend(loc = "upper right", fontsize=20)
-    #ax.set_title("ℓ = $(1/sqrt(Dθ)), χ = $(χ)")
+    ax.set_title("ℓ = $(1/sqrt(Dθ)), χ = $(χ)")
+    #title = latexstring("\\ell = $(round(1/sqrt(Dθ); digits = 2)) \$")
+    #fig.suptitle(title,fontsize=20)
 display(fig)
-name = "figure_4_sim_stab_pde"
+name = "fig_4_stab+pde"
     pathname = "/store/DAMTP/jm2386/Active_Lattice/plots/active_paper/$(name)";
     mkpath(pathname)
     filename = "/store/DAMTP/jm2386/Active_Lattice/plots/active_paper/$(name)/χ=$(χ)_Nx=$(Nx)_Nθ=$(Nθ).pdf";
@@ -407,8 +431,8 @@ params = []
         δ  = 1e-2
         Nx = 50
         Nθ = 20
-for ρ in [0.7], Pe in [12.], Dθ in [4.], L in [128]
-        name = "article_sim_safe"
+for ρ in [0.5], Pe in [30.], Dθ in [4.], L in [128]
+        name = "article_sim_data_fig_7"
         local param
                 #
                 param = sim_param_fraction(; name = name, 
@@ -421,12 +445,12 @@ for ρ in [0.7], Pe in [12.], Dθ in [4.], L in [128]
 end
 param = params[1]
 #
-t_end = 1.1
-start_time = 0.0
+t_end = 0.02
+start_time = 0.00
     @unpack ρ, Pe, Dθ, L = param
-    r = 4
+    r = 8
     numbins = (2*r+1)^2
-    t_saves , η_saves = load_etas_1(param, t_end; dump_interval = 0.5, start_time = start_time);
+    t_saves , η_saves = load_etas(param, t_end; dump_interval = 0.001, start_time = start_time);
     for i in 1:3
         t = t_saves[i]
         η = η_saves[i]
@@ -435,9 +459,10 @@ start_time = 0.0
     end
 #
 rc("text", usetex=true)
-r = 4
+r = 8
+t_saves = [0., 0.5, 1.0]
 t_end = 4.0
-start_time = 1.0
+start_time = 0.0
 fig, axs = plt.subplots(2, 3, figsize=(15,10), constrained_layout = true)
 for i in 1:3
     t = t_saves[i]
@@ -464,7 +489,7 @@ end
     norm2 = matplotlib.colors.Normalize(vmin=0.0, vmax= 0.8)
     fig.colorbar(matplotlib.cm.ScalarMappable(norm=norm1, cmap = colmap), ax = axs[1:2:5], shrink=0.9)
     fig.colorbar(matplotlib.cm.ScalarMappable(norm=norm2, cmap = colmap), ax = axs[2:2:6], shrink=0.9)
-    title = latexstring("\$ \\phi = $(0.7), \\mathrm{Pe} = $(Pe),  \\ell = $(round(1/sqrt(Dθ); digits = 2)) \$")
+    title = latexstring("\$ \\phi = $(ρ), \\mathrm{Pe} = $(Pe),  \\ell = $(round(1/sqrt(Dθ); digits = 2)) \$")
     fig.suptitle(title,fontsize=20)
 display(fig)
 name = "figure_5.5_sim_density_timeseries"
@@ -540,7 +565,7 @@ end
     norm2 = matplotlib.colors.Normalize(vmin=0.0, vmax= 0.8)
     fig.colorbar(matplotlib.cm.ScalarMappable(norm=norm1, cmap = colmap), ax = axs[1:2:5], shrink=0.9)
     fig.colorbar(matplotlib.cm.ScalarMappable(norm=norm2, cmap = colmap), ax = axs[2:2:6], shrink=0.9)
-    title = latexstring("\$ \\phi = $(0.7), \\mathrm{Pe} = $(Pe),  \\ell = $(round(1/sqrt(Dθ); digits = 2)) \$")
+    title = latexstring("\$ \\phi = $(ρ), \\mathrm{Pe} = $(Pe),  \\ell = $(round(1/sqrt(Dθ); digits = 2)) \$")
     fig.suptitle(title,fontsize=20)
 display(fig)
 name = "figure_5.5_sim_density_timeseries"
@@ -626,7 +651,7 @@ t_end = 2.0
 start_time = 0.01
 dump_interval = 0.01
 i = 1
-for i in 5:1:8
+for i in 1:1:8
     param = params[i]
     if i in 1:4  
         ax = axs[1]
@@ -640,7 +665,7 @@ for i in 5:1:8
     try
     μ = mean(invar_saves; dims = 1)[1,:]
     ts = mean(t_saves; dims = 1)[1,:]
-    σ = std(invar_saves; dims = 1)[1,:]
+    σ = std(invar_saves; dims = 1)[1,:]/3
     l = length(ts)
     label = latexstring("\$ \\mathrm{Pe} = $(Pe) \$")
     ax.errorbar(ts,μ, label = label, yerr = σ, errorevery = 10)
@@ -693,8 +718,14 @@ for ρ in [0.7], L in [64], Pe in [8.,12.], Dθ in [4.]
                 local param
     #
 end
-for ρ in [0.7], L in [128], Pe in [8.,12.], Dθ in [4.]
-    name = "article_sim_data_fig_6"
+#
+params = []
+        pert = "rand"
+        T  = 4.0
+        χ = 1.0 #128
+        Δt = 0.001
+for ρ in [0.5], L in [32,64,128], Pe in [20.,30.], Dθ in [4.]
+    name = "article_sim_data_fig_7"
     local param
             #
             param = sim_param_fraction(; name = name, 
@@ -711,13 +742,12 @@ params_pde = []
         T  = 4.0
         χ = 1.0
         #L = 128
-        Δt = 0.001 # need to run sims for this
         pert = "n=1"
-        T  = 1.0
+        T  = 4.0
         δ  = 1e-2
         Nx = 128
         Nθ = 64
-for ρ in [0.7], Pe in [8., 12.], Dθ in [4.], L in [32,64,128]
+for ρ in [0.5], Pe in [20., 30.], Dθ in [4.]
         local param
                 #
                 name = "article_rand_actually_2d_δ=$(δ)" #need to run pde in 2d 
@@ -732,33 +762,39 @@ for ρ in [0.7], Pe in [8., 12.], Dθ in [4.], L in [32,64,128]
 end
 # Collect hist vectors
 for i in 1:2
-    param_pde = params_pde[3*i]
-    t_saves, fa_saves, fp_saves = load_pdes_rand(param_pde,6.0; save_interval = 0.01, start_time = 2.0)
+    param_pde = params_pde[i]
+    if i ==1
+        t_saves, fa_saves, fp_saves = load_pdes_rand(param_pde,6.0; save_interval = 0.1, start_time = 1.5)
+    else
+        t_saves, fa_saves, fp_saves = load_pdes_rand(param_pde,6.0; save_interval = 0.1, start_time = 2.0)
+    end
     pde_density_hist_av_save(param_pde, fa_saves, fp_saves; r = 8, smoothing = true)
 end
-t_end = 4.0
-start_time = 3.9
-for j in 1:4
+
+start_time = 1.0
+t_end = 2.0
+for j in (1):2:(6)
     param = params[j]
     @unpack ρ, Pe, Dθ, L = param
     r = Int64(round(L/16))
     B = [[i,j] for i in (-r):1:r for j in (-r):1:r ] #if (i^2+j^2) ≤ r^2]
     numbins = length(B)
-    t_saves , η_saves = load_etas_av(param, t_end; dump_interval = 0.01, start_time = start_time, trials = 8);
+    t_saves , η_saves = load_etas(param, t_end; dump_interval = 0.001, start_time = start_time)
     time_density_hist_save(param, t_saves, η_saves; r = r, bins = numbins)
 end
+
 #
 rc("text", usetex=true)
 fig, axs = plt.subplots(1, 2, figsize=(15,10))
 for i in 1:2
-    param_pde = params_pde[3*i]
+    param_pde = params_pde[i]
     ax = axs[i]
     if i==1
         add_label = true
     else
         add_label = false
     end
-    for j in (i):2:(4)#(3*i-2):1:(3*i)
+    for j in (i):2:(6)#(3*i-2):1:(3*i)
         param = params[j]
         @unpack ρ, Pe, Dθ, L = param
         name = latexstring(
@@ -802,6 +838,58 @@ end
     "\$ \\ell  =  $(1/sqrt(Dθ)),  \\phi =  $(ρ) \$"
     )
     fig.suptitle(title,fontsize=20)
+display(fig)
+#
+rc("text", usetex=true)
+fig, ax = plt.subplots(1, 1, figsize=(15,10))
+i =2
+    param_pde = params_pde[i]
+    #ax = axs[i]
+        add_label = true
+    for j in (i):2:(6)#(3*i-2):1:(3*i)
+        param = params[j]
+        @unpack ρ, Pe, Dθ, L = param
+        name = latexstring(
+            "\$ N = $(L) \$"
+        )
+        r = Int64(round(L/16))
+        B = [[i,j] for i in (-r):1:r for j in (-r):1:r ]#if (i^2+j^2) ≤ r^2]
+        numbins = min( length(B))#Int64(round(196/2)) )
+        if numbins == length(B)
+            time_density_hist_load(fig, ax, param; r = r, bins = numbins, label_name=name, add_label = add_label,ignore_zero = false )
+        else
+            time_density_hist_load(fig, ax, param; r = r, bins = numbins, label_name=name, add_label = add_label,ignore_zero = true )
+        end
+    end
+    #
+    name = latexstring(
+        "\$ \\overline{\\rho}_\\varepsilon \$"
+    )
+    pde_density_hist_av_load(fig, ax, param_pde; bins = 200, smoothing = false, label_name=name, add_label = add_label ) # bins = 17^2
+    #
+    ax.axis(fontsize=15)
+    ax.xaxis.set_tick_params(labelsize=15)
+    ax.yaxis.set_tick_params(labelsize=15)
+    ax.set_xlabel(L"\rho", fontsize=20)
+    #ax.set_ylabel(L"\Phi", fontsize=20)
+    @unpack Pe = param_pde
+    title = latexstring(
+        "\$ \\mathrm{Pe} = $(Pe) \$"
+    )
+    #ax.set_title(title,fontsize=20)
+    if i == 1
+        
+        ax.axis([0., 1.0 ,0., 16. ],fontsize=15)
+    else
+        ax.legend(loc = "upper right", fontsize=20)
+        ax.axis([0., 1.0 ,0., 10. ],fontsize=15)
+    end
+    ax.xaxis.set_ticks(0.:0.1:1.0)
+    @unpack Dθ,ρ,Pe = params[i]
+    title = latexstring(
+    "\$ \\ell  =  $(1/sqrt(Dθ)),  \\phi =  $(ρ),\\mathrm{Pe} = $(Pe) \$"
+    )
+    ax.set_title(title,fontsize=20)
 display(fig)
 name = "figure_7_histograms"
     pathname = "/store/DAMTP/jm2386/Active_Lattice/plots/active_paper/$(name)";

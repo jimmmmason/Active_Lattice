@@ -30,7 +30,7 @@ for ρ in [0.5], Pe in [20.,30.], Dθ in [4.], L in [128]
 end
 #
 #run sims
-pmap(load_dump_sim_run_home_save, params; distributed = true, batch_size=1, on_error=nothing,)
+pmap(load_dump_sim_run, params; distributed = true, batch_size=1, on_error=nothing,)
 #make video
 pmap(make_sim_vid, params; distributed = true, batch_size=1, on_error=nothing,)
 #

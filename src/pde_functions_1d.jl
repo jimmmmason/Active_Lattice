@@ -373,6 +373,7 @@ t
 function dist_from_unif_1d(param, fa, fp)
     @unpack name, Nx, Nθ, λ, ρa, ρp, δt = param
 
+    #=
     grad_fa = midpoint_bond_diff_θ_1d(fa; Nx = Nx,  Nθ = Nθ) 
     grad_fp =  midpoint_bond_diff_1d(fp; Nx = Nx)
     grad_grad_fa = midpoint_bond_diff_θ_1d(grad_fa; Nx = Nx,  Nθ = Nθ) 
@@ -381,9 +382,9 @@ function dist_from_unif_1d(param, fa, fp)
     partialθ_fa = midpoint_Θ_diff_1d(fa; Nx = Nx,  Nθ = Nθ)
     mixD_fa = midpoint_Θ_diff_1d(grad_fa; Nx = Nx,  Nθ = Nθ)
     partial_partialθ_fa = midpoint_Θ_diff_1d(partialθ_fa; Nx = Nx,  Nθ = Nθ)
-
+    =#
     L2 = 2*π*sum( (fa .- ρa/(2*π) ).^2)/(Nx*Nθ) + sum( (fp .- ρp).^2)/(Nx)
-
+    #=
     H1x = 2*π*sum( (grad_fa ).^2)/(Nx*Nθ) + sum( (grad_fp).^2)/(Nx)
 
     H1θ = 2*π*sum( (partialθ_fa ).^2)/(Nx*Nθ)
@@ -393,8 +394,8 @@ function dist_from_unif_1d(param, fa, fp)
     H2θ = 2*π*sum( (partial_partialθ_fa ).^2)/(Nx*Nθ)
 
     H2_mix = 2*π*sum( (mixD_fa ).^2)/(Nx*Nθ)
-
-    return sqrt( L2 + H1x + H1θ + H2x + H2θ + H2_mix) 
+    =#
+    return sqrt(L2) 
 end
 
 function time_dist_from_unif_1d(param, fa_saves, fp_saves)
