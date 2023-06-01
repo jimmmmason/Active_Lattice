@@ -8,8 +8,8 @@ println("Loading ...")
 using TensorOperations, PyPlot, PyCall
 @pyimport matplotlib.animation as anim
 
-function animate_pdes(param,t_saves,fa_saves,fp_saves)
-    @unpack name, λ, ρa, ρp,Nx, Nθ, δt = param
+function animate_pdes(param,t_saves,fa_saves,fp_saves; video_length = 10000.)
+    @unpack name, λ, ρa, ρp,Nx, Nθ, δt,χ, cbar_min, cbar_max = param
     frames = length(t_saves)-1
     fig, axs = plt.subplots(1, 2, figsize=(12,5))
     function makeframe(i)
@@ -22,13 +22,13 @@ function animate_pdes(param,t_saves,fa_saves,fp_saves)
         @unpack λ, Nx, Nθ, S, ρa, ρp, Dθ= param
         density = Dict{String,Any}()
         @pack! density = fa, fp, t
-        plot_pde_mass(fig,ax1,param,density)
+        plot_pde_mass(fig,ax1,param,density; cbar_max = cbar_max, cbar_min = cbar_min)
         plot_pde_mag( fig,ax2,param,density)
         l = 1/sqrt(Dθ)
-        fig.suptitle("ρₐ = $(ρa),  ρₚ = $(ρp), Pe = $(round(λ/sqrt(Dθ); digits = 3)), l = $(round(l; digits = 3)), t = $(round(t; digits = 3))",size  =15. )
+        fig.suptitle("ϕ = $(round(ρa+ρp; digits = 3)),  χ = $(round(χ; digits = 3)), Pe = $(round(λ/sqrt(Dθ); digits = 3)), l = $(round(l; digits = 3)), t = $(round(t; digits = 3))",size  =15. )
         return fig
     end
-    interval = Int64(round(10000/frames))
+    interval = Int64(round(video_length/frames))
     myanim = anim.FuncAnimation(fig, makeframe, frames=frames, interval=interval)
     # Convert it to an MP4 movie file and saved on disk in this format.
     T = t_saves[frames+1]
@@ -77,7 +77,7 @@ function plot_pde_mag(fig::Figure, ax::PyObject, param::Dict{String,Any}, densit
     return fig
 end
 
-function plot_pde_mass(fig::Figure, ax::PyObject, param::Dict{String,Any}, density::Dict{String,Any}; scale = "relative", cbar = true)
+function plot_pde_mass(fig::Figure, ax::PyObject, param::Dict{String,Any}, density::Dict{String,Any}; scale = "not_relative", cbar = true, cbar_max = 1.0, cbar_min = 0.0)
     @unpack λ, Nx, Nθ, S, ρa, ρp= param
     @unpack fa, fp, t = density
     #=
@@ -102,7 +102,7 @@ function plot_pde_mass(fig::Figure, ax::PyObject, param::Dict{String,Any}, densi
     # Plot points
     colmap = PyPlot.plt.cm.viridis
     if scale == "relative"
-        norm1 = matplotlib.colors.Normalize(vmin=0., vmax= 1.);
+        norm1 = matplotlib.colors.Normalize(vmin= cbar_min, vmax= cbar_max);
     else
         norm1 = matplotlib.colors.Normalize(vmin=minimum(ρ), vmax= maximum(ρ) );
     end
@@ -174,9 +174,9 @@ function Stability_condition(ϕ,Dx,Pe,Dθ)
 end
 
 function make_video(param)
-    @unpack T, save_interval = param
+    @unpack T, save_interval, video_length = param
     t_saves, fa_saves, fp_saves = load_pdes(param,T; save_interval = save_interval)
-    animate_pdes(param,t_saves,fa_saves,fp_saves)
+    animate_pdes(param,t_saves,fa_saves,fp_saves; video_length=video_length)
 end
 
 
@@ -299,36 +299,38 @@ end
 
 # 1d wave plots 
 
-function make_phase_video_1d(param; frames = 100, speed_factor = 0.1)
+function make_phase_video_1d(param; frames = 100)
     @unpack T, save_interval = param
-    save_interval = speed_factor*T/frames
+    save_interval = T/frames
     t_saves, fa_saves, fp_saves = load_pdes(param,T; save_interval = save_interval)
-    frames = Int64(round(length(t_saves)*speed_factor))-1
-    animate_phase_pdes_1d(param,t_saves,fa_saves,fp_saves; frames = frames-1, speed_factor =speed_factor)
+    frames = Int64(round(length(t_saves)))-1
+    animate_phase_pdes_1d(param,t_saves,fa_saves,fp_saves; frames = frames-1)
 end
 
+function pmap_make_phase_video_1d(param)
+    @unpack T, save_interval = param
+    frames = T*100
+    save_interval = T/frames
+    t_saves, fa_saves, fp_saves = load_pdes(param,T; save_interval = save_interval)
+    frames = Int64(round(length(t_saves)))-1
+    animate_phase_pdes_1d(param,t_saves,fa_saves,fp_saves; frames = frames-1)
+end
 
-function animate_phase_pdes_1d(param,t_saves,fa_saves,fp_saves; frames = 99, speed_factor = 0.1)
+function animate_phase_pdes_1d(param,t_saves,fa_saves,fp_saves; frames = 99)
     @unpack name, λ, ρa, ρp, Nx, Nθ, δt, Dθ, χ, γ = param
-    fig, axs = plt.subplots(2, 2, figsize=(12,8))
-    fig.suptitle("ℓ= $(1/sqrt(Dθ)), χ = $(χ), ρ = $(round(ρa+ρp;digits = 3))", fontsize = 20, y = 1.05)
-    fig.tight_layout()
+    fig, axs = plt.subplots(2, 1, figsize=(10,10))
     function makeframe(i)
         clf()
-        ax1 = fig.add_subplot(321)
-        ax2 = fig.add_subplot(322)
-        ax3 = fig.add_subplot(323)
-        ax4 = fig.add_subplot(324)
-        ax5 = fig.add_subplot(325)
-        ax6 = fig.add_subplot(326)
-        axs = ax1, ax2, ax3, ax4, ax5, ax6
-        test_vid_phase_pde_plot_1d(fig, axs, param, t_saves, fa_saves, fp_saves, i+1; speed_factor = speed_factor)
+        ax1 = fig.add_subplot(211)
+        ax2 = fig.add_subplot(212)
+        axs = ax1, ax2
+        vid_pde_plot_1d(fig, axs, param, t_saves, fa_saves, fp_saves, i+1)
         return fig
     end
-    interval = 5*Int64(round(10000/frames))
+    interval = 5*Int64(round(20000/frames))
     myanim = anim.FuncAnimation(fig, makeframe, frames=frames, interval=interval)
     # Convert it to an MP4 movie file and saved on disk in this format.
-    T = t_saves[Int64(round((frames+1)/speed_factor))]
+    T = t_saves[Int64(round((frames+1)))]
     pathname = "/store/DAMTP/jm2386/Active_Lattice/plots/vids/pde_phase_vids/$(name)/active=$(ρa)_passive=$(ρp)_lamb=$(λ)";
     mkpath(pathname)
     filename = "/store/DAMTP/jm2386/Active_Lattice/plots/vids/pde_phase_vids/$(name)/active=$(ρa)_passive=$(ρp)_lamb=$(λ)/time=$(round(T; digits = 5))_Nx=$(Nx)_Nθ=$(Nθ)_active=$(ρa)_passive=$(ρp)_lamb=$(λ).mp4";
@@ -456,6 +458,73 @@ function test_vid_phase_pde_plot_1d(fig::Figure, axs, param::Dict{String,Any}, t
 
     fig.suptitle("ℓ= $(1/sqrt(Dθ)), χ = $(χ), ρ = $(round(ρa+ρp;digits = 3))", fontsize = 20, y = 1.05)
     fig.tight_layout()
+end
+
+function vid_pde_plot_1d(fig::Figure, axs, param::Dict{String,Any}, t_saves, fa_saves, fp_saves, i)
+    @unpack Nx, Nθ, ρa, ρp, χ, Dθ, Dx, k, γ,Pe = param
+    ρa_saves, ρp_saves = deepcopy(spatial_densities(fa_saves, fp_saves; Nx= Nx, Nθ = Nθ))
+
+    push!(ρa_saves[i], ρa_saves[i][1])
+    push!(ρp_saves[i], ρp_saves[i][1])
+
+    ρsum = ρp_saves[i]+ρa_saves[i]
+
+    #sum(length.(fp_saves).-128)
+    #=
+    axs[1].plot((1:Nx)/Nx,ρa_saves[i], color = "red")
+    axs[1].plot((1:Nx)/Nx,ρp_saves[i]+ρa_saves[i], color = "black")
+    axs[1].plot((1:Nx)/Nx,ρp_saves[i], color = "blue")
+    =#
+    axs[1].plot((0:1:Nx)/Nx,ρa_saves[i].-ρa, color = "red", label = L"\rho^a - \phi^a")
+    axs[1].plot((0:1:Nx)/Nx,ρsum.-ρa.-ρp, color = "black", label = L"\rho - \phi")
+    axs[1].plot((0:1:Nx)/Nx,ρp_saves[i].-ρp, color = "blue", label = L"\rho^p - \phi^p")
+
+    axs[1].xaxis.set_ticks(0.:0.2:1.0)
+    axs[1].xaxis.set_tick_params(labelsize=15)
+    axs[1].yaxis.set_tick_params(labelsize=15)
+    rhomax = maximum(maximum(ρa_saves).-ρa)+maximum(maximum(ρp_saves).-ρp)
+    axs[1].axis([0., 1., -rhomax , rhomax])
+    #axs[1].axis([0., 1., min(minimum(minimum(ρa_saves)),minimum(minimum(ρp_saves))),maximum(maximum( ρa_saves+ρp_saves ))])
+    axs[1].set_xlabel(L"x",fontsize=20)
+    #axs[1].set_ylabel(L"\rho,",fontsize=20)
+    title = latexstring("\$ \\ell = $(round(1/sqrt(Dθ); digits = 2)), \\chi = $(χ), \\phi = $(ρa+ρp), \\mathrm{Pe} = $(round(Pe; digits = 3)), t = $(round(t_saves[i]; digits = 3))\$")
+    axs[1].set_title(title,fontsize=20)
+
+    mat1 = zeros(1, Nx+1)
+    mat2= zeros(1, Nx+1)
+    mags = mag_1d(fa_saves[i]; Nθ = Nθ)
+    push!(mags,mags[1])
+    mat1[1, :] = mags
+    mat2[1, :] = mags.*(-ρsum.+1)
+
+    #colmap = PyPlot.plt.cm.seismic
+    colmap = PyPlot.plt.cm.PRGn
+    norm1 = matplotlib.colors.Normalize(vmin= -maximum(abs.(mags)) , vmax= maximum(abs.(mags)) )
+    #norm2 = matplotlib.colors.Normalize(vmin= minimum(mags/10) , vmax= maximum(mags)/10 )
+
+    axs[2].matshow(mat1; norm = norm1,  cmap = colmap, extent = [0., 1., 0., 0.1])
+    #axs[3].matshow(mat2; norm = norm2,  cmap = colmap, extent = [0., 1., 0., 0.1])
+
+    axs[2].set_aspect(1.)
+    #axs[3].set_aspect(1.)
+
+    axs[2].xaxis.set_ticks(0.:0.2:1.0)
+    axs[2].yaxis.set_ticks([])
+    axs[2].xaxis.set_tick_params(labelsize=15)
+    axs[2].xaxis.tick_bottom()
+    #ax.set_title(L"\Re{ \lambda_n^\mathrm{max}} = 0",fontsize=20)
+    #ax.set_xlabel(L"x",fontsize=20)
+
+    axs[2].set_ylabel(L"\mathbf{p}", fontsize=20, rotation=0)
+    axs[2].yaxis.set_label_coords(-.05, .5)
+
+    lines, labels = axs[1].get_legend_handles_labels()
+    fig.tight_layout()
+    ldg = fig.legend(lines, labels, loc = "center right", fontsize=20, bbox_to_anchor = (0.25, 0.25, 1, 1),
+    bbox_transform = plt.gcf().transFigure)
+
+    #fig.colorbar(matplotlib.cm.ScalarMappable(norm=norm1, cmap = colmap), ax = axs[2:1:3], fraction = 0.0455)
+    return ldg
 end
 
 function phase_pde_plot_1d_test(fig::Figure, axs ::Array{PyObject,2}, param::Dict{String,Any}, t_saves, fa_saves, fp_saves)

@@ -135,6 +135,107 @@ end
 
 
 
+
+###
+###
+
+function ap_MathieuMatrix_checker(ρa,ρp,Dx,Pe,Dθ; k::Int64 = 10, ω = [2π, 0],γ= 0.0)
+    ρ = ρa + ρp
+    v0 = Pe*sqrt(Dθ)
+    #
+    ds = self_diff(ρ;γ= γ)
+    dp = self_diff_prime(ρ)
+    DD = (1-ds)/ρ
+    #=
+    ds = self_diff(ρ)+γ
+    dp = self_diff_prime(ρ)
+    DD = (1+2*γ-ds)/ρ
+    =#
+    #=
+    # oiginal paramters: 
+    ds = self_diff(ρ)
+    dp = self_diff_prime(ρ)
+    DD = (1-ds)/ρ
+    =#
+    s = DD - 1
+    p = -Dx*ds*norm(ω)^2
+    q = -v0*im*ω*ds/2
+    α = -Dx*DD*[ρp,ρa]*norm(ω)^2
+    β = -v0*im*ω*s/2
+    γ = -v0*ρa*dp*im*ω
+    matrix = Complex.(zeros(2*k, 2*k))
+    for u in 1:(2*k)
+        for v in 1:(2*k)
+                if abs(u - v) == 2
+                    matrix[u, v] = q[1]
+                elseif v - u == 1
+                    matrix[u, v] = q[2]
+                elseif v - u == -1
+                        matrix[u, v] = -q[2]
+                elseif u == v
+                    matrix[u, v] = p - Dθ*( floor(u/2))^2 
+                end
+        end
+    end
+
+    matrix[1, 1] = p + α[1]
+    matrix[1, 2] = α[1]
+    matrix[1, 3] = β[1]*ρp
+    matrix[1, 4] = β[2]*ρp
+
+    matrix[2, 1] = α[2]
+    matrix[2, 2] = p + α[2]
+    matrix[2, 3] = β[1]*ρa +q[1]
+    matrix[2, 4] = β[2]*ρa +q[2]
+
+    matrix[3, 1] = γ[1]
+    matrix[3, 2] = γ[1] + 2*q[1]
+    matrix[3, 3] = p - Dθ
+    matrix[3, 4] = 0
+
+    matrix[4, 1] = γ[2]
+    matrix[4, 2] = γ[2] + 2*q[2]
+    matrix[4, 3] = 0
+    matrix[4, 4] = p - Dθ
+
+    return matrix
+end
+
+function ap_MathieuEigen_checker(matrix)
+    Egs = eigen(matrix)
+    return Egs.values, Egs.vectors
+end 
+
+function ap_MathieuEigen_lite_checker(matrix; k=20)
+    return  eigvals(matrix)[4]
+end
+
+function ap_lin_stab_line_checker(ρa,ρp; Dx =1. ,Pe = 50., Dθ = 100., k = 40 )
+    matrix = ap_MathieuMatrix_checker(ρa,ρp,Dx,Pe,Dθ; k = k);
+    amin = ap_MathieuEigen_lite_checker(matrix; k = k)  
+    return real(amin)
+end
+
+function ap_lin_stab_imaginary_checker(ρa,ρp; Dx =1. ,Pe = 1., Dθ = 100., k = 40 )
+    matrix = ap_MathieuMatrix_checker(ρa,ρp,Dx,Pe,Dθ; k = k);
+    amin = ap_MathieuEigen_lite_checker(matrix; k = k)  
+    return imag(amin)
+end
+
+function lin_stab_line_fraction_checker(ρ,χ; Dx =1. ,Pe = 20., Dθ =100.,k=40, ω = [2*π,0] )
+    ρa = χ*ρ
+    ρp = (1-χ)*ρ
+    matrix = ap_MathieuMatrix_checker(ρa,ρp,Dx,Pe,Dθ; k = k, ω = ω);
+    amin = ap_MathieuEigen_lite_checker(matrix; k = k)  
+    return real(amin)
+end
+
+
+
+
+###
+
+
 #=
 ρ = 0.7
 Pe = 3.

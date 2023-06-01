@@ -9,7 +9,7 @@ include("/home/jm2386/Active_Lattice/src/pde_functions.jl")
 include("/home/jm2386/Active_Lattice/src/sim_functions.jl")
 include("/home/jm2386/Active_Lattice/src/lin_stab_solver.jl")
 ##
-function pde_param_fraction(; name = "test", D =1., Dx = 1., Pe =1., Dθ = 10, ρ= 0.5, χ = 1.0, Nx = 100, Nθ = 20, δt = 1e-5, T= 0.001, save_interval = 0.01, max_steps = 1e8, max_runs = 6, λ_step = 10., λmax = 100., λs = 20.:20.:100., pert = "n=1", δ = 0.01, k=20,γ = 0.0)
+function pde_param_fraction(; name = "test", D =1., Dx = 1., Pe =1., Dθ = 10, ρ= 0.5, χ = 1.0, Nx = 100, Nθ = 20, δt = 1e-5, T= 0.001, save_interval = 0.01, max_steps = 1e8, max_runs = 6, λ_step = 10., λmax = 100., λs = 20.:20.:100., pert = "n=1", δ = 0.01, k=20,γ = 0.0, video_length = 10000., cbar_max = 1.0, cbar_min = 0.0)
     Ω  = [[i,j] for i in 1:Nx for j in 1:Nx ] 
     S  = [ θ for θ in 1:Nθ]
     E = [[1,0],[0,1],[0,-1],[-1,0],]
@@ -18,7 +18,7 @@ function pde_param_fraction(; name = "test", D =1., Dx = 1., Pe =1., Dθ = 10, �
     ρp = (1-χ)*ρ
     ρa = χ*ρ
     param = Dict{String,Any}()
-    @pack! param = k, name, D, λ, ρa, ρp, δt, Nx, Nθ, S,  E, Dθ, T, save_interval, max_steps, max_runs, λ_step, λmax, λs, pert, δ, Pe, Dx, χ, ρ, γ
+    @pack! param = k, name, D, λ, ρa, ρp, δt, Nx, Nθ, S,  E, Dθ, T, save_interval, max_steps, max_runs, λ_step, λmax, λs, pert, δ, Pe, Dx, χ, ρ, γ, video_length, cbar_max, cbar_min
     return param
 end
 function sim_param_fraction(;  name = "test", D =1. , Pe =1. ,ρ = 0.5, χ = 0.5, L=10, d=2, Δt = 0.01, Dθ =10., T=1.0, γ = 0.)

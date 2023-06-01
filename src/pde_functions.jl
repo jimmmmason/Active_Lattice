@@ -364,7 +364,7 @@ function run_pde_until!(param::Dict{String,Any},density::Dict{String,Any},T; sav
 end
 
 function perturb_pde!(param::Dict{String,Any}, density::Dict{String,Any}; δ = 0.01, pert = "n=2")
-    @unpack Nx, S, ρa, ρp, λ, Dθ, Nx, Nθ, Dx, Pe, k  = param
+    @unpack Nx, S, ρa, ρp, λ, Dθ, Nx, Nθ, Dx, Pe, k, γ  = param
     @unpack fa, fp = density
     ρ = ρa + ρp
     if ρ >0.9
@@ -385,11 +385,11 @@ function perturb_pde!(param::Dict{String,Any}, density::Dict{String,Any}; δ = 0
     end
     if pert == "n=1"
         K = collect(0:1:(k-1))
-        c,ω = ap_mstabparams_lite(ρa,ρp,Dx,Pe,Dθ)
-        matrix = ap_MathieuMatrix(c, ω; k=k)
-        a, A = ap_MathieuEigen(matrix)
-        Pa = (x,y,θ) -> real.( dot(A[2:1:(k+1),k+1],cos.(θ*K*(2*π/Nθ)))*exp(im*x*ω/Nx) )
-        Pp = (x,y) -> real.(A[1,1]*exp(im*x*ω/Nx));
+            matrix = ap_MathieuMatrix(ρa,ρp,Dx,Pe,Dθ; k=k, γ= γ)
+            ω = 2*π
+            a, A = ap_MathieuEigen(matrix)
+        Pa = (x,y,θ) -> real.( dot(A[2:1:(k+1),k+1],cos.(θ*K*(2*π/Nθ)))*exp(-im*x*ω/Nx) )
+        Pp = (x,y) -> real.(A[1,k+1]*exp(im*x*ω/Nx));
     end
     if pert == "rand"
         Pa = (x,y,θ) -> ρa*(( rand() - 0.5 )/(ρa+0.01))/(2*π);
@@ -414,6 +414,14 @@ function perturb_pde_run(param)
     @unpack T, save_interval, max_steps, pert, δ = param
     density = initialize_density(param)
     perturb_pde!(param,density; pert = pert, δ = δ);
+    run_pde_until!(param,density,T; save_on = true, max_steps = max_steps, save_interval = save_interval)
+end
+
+function perturb_rand_pde_run(param)
+    @unpack T, save_interval, max_steps, pert, δ = param
+    density = initialize_density(param)
+    perturb_pde!(param,density; pert = "n=1", δ = δ);
+    perturb_pde!(param,density; pert = "rand", δ = δ);
     run_pde_until!(param,density,T; save_on = true, max_steps = max_steps, save_interval = save_interval)
 end
 
@@ -478,6 +486,7 @@ function load_dump_pde_run(param)
         println("loading failed")
     end
 end
+
 
 function load_dump_pde_run_homesave(param)
     @unpack T, save_interval, max_steps, pert, δ = param

@@ -156,9 +156,9 @@ end
 params = []
         pert = "n=1"
         T  = 4.0
-        δ  = 1e-4
-        name = "article_stability_10_1d_δ=$(δ)"
-for ρ in [0.9], χ in [1.0], Pe in [6., 8., 10., 12.], Dθ in [4.]
+        δ  = 1e-8
+        name = "article_stability_L2norm_1d_δ=$(δ)"
+for ρ in [0.96], χ in [1.0], Pe in [8., 10., 12.], Dθ in [4.]
     local param
     #
     param = pde_param_fraction(; name = name, 
@@ -248,7 +248,7 @@ fig, ax = plt.subplots(1, 1, figsize=(10,10))
 #ax.plot(fa_saves[1])
 #display(fig)
 #i=1
-for i in 1:11
+for i in 1:3
     param = params[i]
     @unpack ρ, Pe, χ, Dθ = param
     t_saves, fa_saves, fp_saves = load_pdes(param,T; save_interval = 0.01)
@@ -256,7 +256,7 @@ for i in 1:11
     label = latexstring("\$ \\mathrm{Pe} = $(Pe) \$")
     ax.plot(t_saves,dist_saves, label = label)
 end
-ax.axis([0., 2.0 ,0., .0004 ],fontsize=15) 
+ax.axis([0., 4.0 ,0., .0000004 ],fontsize=15) 
     param = params[1]
     @unpack ρ, Dθ = param
     ax.xaxis.set_tick_params(labelsize=15)

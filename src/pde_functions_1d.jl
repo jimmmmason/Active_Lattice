@@ -357,6 +357,22 @@ function perturb_pde_run_1d(param)
 end
 
 
+function load_pde_run_1d(param)
+    @unpack T, save_interval, max_steps, pert, δ = param
+    density = initialize_density_1d(param)
+    try
+        t_saves, fa_saves, fp_saves = load_pdes_1d(param,T; save_interval = 10*save_interval, start_time = 10*save_interval)
+        k = length(t_saves)
+        t, fa, fp = t_saves[k], fa_saves[k], fp_saves[k]
+        @pack! density = t, fa, fp
+        println("loaded t = $(t)")
+    catch
+        println("load failed")
+        perturb_pde_1d!(param,density; pert = pert, δ = δ);
+    end
+    run_pde_until_1d!(param,density,T; save_on = true, max_steps = max_steps, save_interval = save_interval)
+end
+
 #=
 for i in 1:100
 pde_stepper_1d!(param,density)
