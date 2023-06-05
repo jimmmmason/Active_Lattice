@@ -10,49 +10,50 @@ include("/home/jm2386/Active_Lattice/src/article_src.jl")
 
 ###
 #2d rand-pert travelling wave
-        # χ = 1.0
-        # Dθ = 4.0
-        # Dx = 1.
-        # ρ_start = 0.4
-        # ρ_end = 1.0
-        # Pe_end = 50
-        # Pe_start = 0
-        # xs = collect(0.4:0.001:0.999)
+        χ = 0.1
+        Dθ = 100.0
+        Dx = 1.
+        ρ_start = 0.4
+        ρ_end = 1.0
+        Pe_end = 100
+        Pe_start = 0
+        xs = collect(0.4:0.001:0.999)
 
-        # k= 10
-        # X=[]
-        # Y=[]
-        # for x in xs
-        #         try
-        #             local f
-        #             f(y) = lin_stab_line_fraction(x,χ; Dx =Dx ,Pe = y, Dθ = Dθ, k = k)
-        #             Pe = find_zero(f, (0.,  100.))
-        #             push!(Y,Pe)
-        #             push!(X,x)
-        #         catch
-        #         end
-        # end
+        k= 10
+        X=[]
+        Y=[]
+        using Roots
+        for x in xs
+                try
+                    local f
+                    f(y) = lin_stab_line_fraction(x,χ; Dx =Dx ,Pe = y, Dθ = Dθ, k = k)
+                    Pe = find_zero(f, (0.,  100.))
+                    push!(Y,Pe)
+                    push!(X,x)
+                catch
+                end
+        end
 
-        # Pemin = minimum(Y)
-        # i = argmin(Y)
-        # ϕmin = X[i]
+        Pemin = minimum(Y)
+        i = argmin(Y)
+        ϕmin = X[i]
 
 params = []
         pert = "n=1"
         
-        χ = 0.1
-        Dθ = 4.0
-        ϕmin = 0.929
-        Pemin = 41.1445070772628
+        # χ = 0.1
+        # Dθ = 4.0
+        # ϕmin = 0.929
+        # Pemin = 41.1445070772628
         ρ = ϕmin
         Pe = Pemin
 
         T  = 24.0
         save_interval = 0.01
-        δ  = 1e-3
+        δ  = 1e-2
         k = 20
-        Nx = 50
-        Nθ = 20
+        Nx = 128
+        Nθ = 16
         name = "wave_pert+rand_2d_δ=$(δ)"
 
 param = pde_param_fraction(; name = name, 
@@ -74,7 +75,7 @@ pmap(make_video, params; distributed = true, batch_size=1, on_error=nothing,)
 
 #1d rand-pert travelling wave
         χ = 0.1
-        Dθ = 400.0
+        Dθ = 4.0
         Dx = 1.
         ρ_start = 0.4
         ρ_end = 1.0
@@ -114,13 +115,14 @@ pmap(make_video, params; distributed = true, batch_size=1, on_error=nothing,)
         # lin_imaginary_fraction(ρ,χ; Dx =Dx ,Pe = Pe, Dθ = Dθ, k = k)
         # lin_stab_line_fraction(ρ,χ; Dx =Dx ,Pe = Pe, Dθ = Dθ, k = k)
 
-        T  = 6.0
+        T  = 24.0
         save_interval = 0.01
         δ  = 1e-3
         k = 20
         Nx = 128
         Nθ = 64
-        name = "wave_rand_1d_δ=$(δ)"
+        name = "ap_wave_1d_δ=0.0001_χ=0.1_l=0.5"
+        #name = "wave_rand_1d_δ=$(δ)"
 
 param = pde_param_fraction(; name = name, 
                         ρ = ρ, Pe = Pe, χ = χ, T = T, 
@@ -135,6 +137,35 @@ pmap(perturb_pde_run_1d, params; distributed = true, batch_size=1, on_error=noth
 #make video
 pmap(make_phase_video_1d, params; distributed = true, batch_size=1, on_error=nothing,)
 ######
+@unpack T, save_interval = param
+frames = 100
+save_interval = T/frames
+t_saves, fa_saves, fp_saves = load_pdes_1d(param,T; save_interval = save_interval)
+
+
+
+@unpack name, λ, ρa, ρp, Nx, Nθ, δt, Dθ, χ, γ = param
+fig, axs = plt.subplots(2, 1, figsize=(10,10))
+function makeframe(i)
+        clf()
+        ax1 = fig.add_subplot(211)
+        ax2 = fig.add_subplot(212)
+        axs = ax1, ax2
+        vid_pde_plot_1d(fig, axs, param, t_saves, fa_saves[1:(i+1)], fp_saves[1:(i+1)], i+1)
+        return fig
+end
+
+i = 98
+fig, axs = plt.subplots(2, 1, figsize=(10,10))
+makeframe(i)
+display(fig)
+
+
+pathname = "/store/DAMTP/jm2386/Active_Lattice/plots/$(name)";
+mkpath(pathname)
+filename = "/store/DAMTP/jm2386/Active_Lattice/plots/$(name)/_i=$(i).pdf";
+PyPlot.savefig(filename,dpi = 100, format = "pdf")
+
 ###
 
 

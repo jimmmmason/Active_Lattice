@@ -24,7 +24,7 @@ exit
 #addprocs([("cyllene",:auto)])
 #addprocs([("indium",:auto)])
 #addprocs([("orthosie",:auto)])
-addprocs([("refract",3)])
+addprocs([("refract",1)])
 addprocs([("radius",3)])
 #addprocs([("teryas",6)])
 #addprocs([("eloquence",4)])
