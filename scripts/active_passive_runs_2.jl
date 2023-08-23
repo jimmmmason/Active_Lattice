@@ -3,8 +3,10 @@ using DrWatson
 @quickactivate "Active_Lattice"
 include("/home/jm2386/Active_Lattice/src/article_src.jl")
 #
-@everywhere include("/home/jm2386/Active_Lattice/src/article_src.jl")
-###
+@everywhere include("/home/jm2386/Active_Lattice/src/pm_pde_functions.jl")
+@everywhere include("/home/jm2386/Active_Lattice/src/pm_pde_functions.jl")
+######
+
 
 
 ### 1d pde wave runs

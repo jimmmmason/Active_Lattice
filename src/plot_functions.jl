@@ -8,7 +8,7 @@ println("Loading ...")
 using TensorOperations, PyPlot, PyCall
 @pyimport matplotlib.animation as anim
 
-function animate_pdes(param,t_saves,fa_saves,fp_saves; video_length = 10000.)
+function animate_pdes(param,t_saves,fa_saves,fp_saves; video_length = 10000., scale = "not_relative")
     @unpack name, λ, ρa, ρp,Nx, Nθ, δt,χ, cbar_min, cbar_max = param
     frames = length(t_saves)-1
     fig, axs = plt.subplots(1, 2, figsize=(12,5))
@@ -22,7 +22,7 @@ function animate_pdes(param,t_saves,fa_saves,fp_saves; video_length = 10000.)
         @unpack λ, Nx, Nθ, S, ρa, ρp, Dθ= param
         density = Dict{String,Any}()
         @pack! density = fa, fp, t
-        plot_pde_mass(fig,ax1,param,density; cbar_max = cbar_max, cbar_min = cbar_min)
+        plot_pde_mass(fig,ax1,param,density; cbar_max = cbar_max, cbar_min = cbar_min, scale = scale)
         plot_pde_mag( fig,ax2,param,density)
         l = 1/sqrt(Dθ)
         fig.suptitle("ϕ = $(round(ρa+ρp; digits = 3)),  χ = $(round(χ; digits = 3)), Pe = $(round(λ/sqrt(Dθ); digits = 3)), l = $(round(l; digits = 3)), t = $(round(t; digits = 3))",size  =15. )
@@ -173,10 +173,10 @@ function Stability_condition(ϕ,Dx,Pe,Dθ)
     return μ - (- ω2*(c4 + c5)*(c3 + c5)/(μ0 + c2*ω2) - ω2*(1 + Λ )/μ)
 end
 
-function make_video(param)
+function make_video(param; scale = "not_relative")
     @unpack T, save_interval, video_length = param
     t_saves, fa_saves, fp_saves = load_pdes(param,T; save_interval = save_interval)
-    animate_pdes(param,t_saves,fa_saves,fp_saves; video_length=video_length)
+    animate_pdes(param,t_saves,fa_saves,fp_saves; video_length=video_length, scale = scale)
 end
 
 
@@ -499,7 +499,8 @@ function vid_pde_plot_1d(fig::Figure, axs, param::Dict{String,Any}, t_saves, fa_
 
     #colmap = PyPlot.plt.cm.seismic
     colmap = PyPlot.plt.cm.PRGn
-    norm1 = matplotlib.colors.Normalize(vmin= -maximum(abs.(mags)) , vmax= maximum(abs.(mags)) )
+    norm1 = matplotlib.colors.Normalize(vmin= -rhomax*0.5 , vmax= rhomax*0.5) 
+    #norm1 = matplotlib.colors.Normalize(vmin= -maximum(abs.(mags)) , vmax= maximum(abs.(mags)) )
     #norm2 = matplotlib.colors.Normalize(vmin= minimum(mags/10) , vmax= maximum(mags)/10 )
 
     axs[2].matshow(mat1; norm = norm1,  cmap = colmap, extent = [0., 1., 0., 0.1])
@@ -547,6 +548,120 @@ function spatial_densities(fa_saves, fp_saves; Nx= 50, Nθ = 20)
     end
     return ρa_saves, ρp_saves
 end
+###
+
+
+function spatial_currents(fa_saves, fp_saves, param)
+    @unpack Nx, Nθ, ρa, ρp, χ, Dθ, Dx, k, γ,Pe,λ  = param
+    ja_saves, jp_saves = [], []
+    for i in eachindex(fa_saves)
+        fa = fa_saves[i]
+        fp =  fp_saves[i]
+
+        ρ::Array{Float64,1} = fp + sum(fa; dims =2)[:,1].*(2*π/Nθ)
+    
+        Ua::Array{Float64,2},   Up::Array{Float64,1},   Uθ::Array{Float64,2}   = U_velocities_1d(fa,fp,ρ; Nx=Nx, Nθ=Nθ, λ=λ,γ=γ)
+        moba::Array{Float64,2}, mobp::Array{Float64,1}, mobθ::Array{Float64,2} = mob_1d(fa,fp,ρ;γ=γ)
+        Fa::Array{Float64,2},   Fp::Array{Float64,1},   Fθ::Array{Float64,2}   = F_fluxes_1d(Ua, Up, Uθ, moba, mobp, mobθ; Nx=Nx, Nθ=Nθ)
+        
+        ja = sum(Fa; dims =2)[:,1].*(2*π/Nθ)
+        jp = Fp
+        push!(ja_saves,ja)
+        push!(jp_saves,jp)
+    end
+    return ja_saves, jp_saves
+end
+
+function vid_pde_plot_1d_plus(fig::Figure, axs, param::Dict{String,Any}, t_saves, fa_saves, fp_saves, i)
+    @unpack Nx, Nθ, ρa, ρp, χ, Dθ, Dx, k, γ,Pe,  = param
+    ρa_saves, ρp_saves = deepcopy(spatial_densities(fa_saves, fp_saves; Nx= Nx, Nθ = Nθ))
+
+    push!(ρa_saves[i], ρa_saves[i][1])
+    push!(ρp_saves[i], ρp_saves[i][1])
+
+    ja_saves, jp_saves = deepcopy(spatial_currents(fa_saves, fp_saves,param))
+
+    push!(ja_saves[i], ja_saves[i][1])
+    push!(jp_saves[i], jp_saves[i][1])
+
+    ρsum = ρp_saves[i]+ρa_saves[i]
+
+    axs[1].plot((0:1:Nx)/Nx,ρa_saves[i].-ρa, color = "red", label = L"\rho^a - \phi^a")
+    axs[1].plot((0:1:Nx)/Nx,ρsum.-ρa.-ρp, color = "black", label = L"\rho - \phi")
+    axs[1].plot((0:1:Nx)/Nx,ρp_saves[i].-ρp, color = "blue", label = L"\rho^p - \phi^p")
+
+    axs[1].xaxis.set_ticks(0.:0.2:1.0)
+    axs[1].xaxis.set_tick_params(labelsize=15)
+    axs[1].yaxis.set_tick_params(labelsize=15)
+    rhomax = maximum(maximum(ρa_saves).-ρa)+maximum(maximum(ρp_saves).-ρp)
+    axs[1].axis([0., 1., -rhomax , rhomax])
+
+    title = latexstring("\$ \\ell = $(round(1/sqrt(Dθ); digits = 2)), \\chi = $(χ), \\phi = $(ρa+ρp), \\mathrm{Pe} = $(round(Pe; digits = 3)), t = $(round(t_saves[i]; digits = 3))\$")
+    axs[1].set_title(title,fontsize=20)
+
+    mat1 = zeros(Nx+1)
+    mags = mag_1d(fa_saves[i]; Nθ = Nθ)
+    push!(mags,mags[1])
+    mat1[ :] = mags
+
+    axs[2].plot((0:1:Nx)/Nx, mat1 , color = "black",label = L"m")
+
+    axs[2].xaxis.set_ticks(0.:0.2:1.0)
+    axs[2].xaxis.set_tick_params(labelsize=15)
+    axs[2].yaxis.set_tick_params(labelsize=15)
+    axs[2].axis([0., 1., -rhomax , rhomax])
+
+    axs[3].plot((0:1:Nx)/Nx, ja_saves[i], color = "red", label = L"j^a")
+    axs[3].plot((0:1:Nx)/Nx, jp_saves[i], color = "black", label = L"j^p")
+
+    jmax = maximum(maximum(ja_saves))+maximum(maximum(jp_saves))
+    axs[3].xaxis.set_ticks(0.:0.2:1.0)
+    axs[3].xaxis.set_tick_params(labelsize=15)
+    axs[3].yaxis.set_tick_params(labelsize=15)
+    axs[3].axis([0., 1., -jmax , jmax])
+    axs[3].set_xlabel(L"x",fontsize=20)
+
+    # lines, labels = axs[1].get_legend_handles_labels()
+    fig.tight_layout()
+    fig.legend(loc = "center right", fontsize=20, bbox_to_anchor = (0.25, 0.25, 1, 1),
+    bbox_transform = plt.gcf().transFigure)
+    
+
+    #fig.colorbar(matplotlib.cm.ScalarMappable(norm=norm1, cmap = colmap), ax = axs[2:1:3], fraction = 0.0455)
+end
+
+function animate_phase_pdes_1d_plus(param,t_saves,fa_saves,fp_saves; frames = 99)
+    @unpack name, λ, ρa, ρp, Nx, Nθ, δt, Dθ, χ, γ = param
+    fig, axs = plt.subplots(3, 1, figsize=(10,10))
+    function makeframe(i)
+        clf()
+        ax1 = fig.add_subplot(311)
+        ax2 = fig.add_subplot(312)
+        ax3 = fig.add_subplot(313)
+        axs = ax1, ax2, ax3
+        vid_pde_plot_1d_plus(fig, axs, param, t_saves, fa_saves, fp_saves, i+1)
+        return fig
+    end
+    interval = 5*Int64(round(20000/frames))
+    myanim = anim.FuncAnimation(fig, makeframe, frames=frames, interval=interval)
+    # Convert it to an MP4 movie file and saved on disk in this format.
+    T = t_saves[Int64(round((frames+1)))]
+    pathname = "/store/DAMTP/jm2386/Active_Lattice/plots/vids/pde_phase_vids_plus/$(name)/active=$(ρa)_passive=$(ρp)_lamb=$(λ)";
+    mkpath(pathname)
+    filename = "/store/DAMTP/jm2386/Active_Lattice/plots/vids/pde_phase_vids_plus/$(name)/active=$(ρa)_passive=$(ρp)_lamb=$(λ)/time=$(round(T; digits = 5))_Nx=$(Nx)_Nθ=$(Nθ)_active=$(ρa)_passive=$(ρp)_lamb=$(λ).mp4";
+    myanim[:save](filename, bitrate=-1, dpi= 100, extra_args=["-vcodec", "libx264", "-pix_fmt", "yuv420p"])
+end 
+
+function make_phase_video_1d_plus(param; frames = 100)
+    @unpack T, save_interval,frames = param
+    save_interval = T/frames
+    t_saves, fa_saves, fp_saves = load_pdes(param,T; save_interval = save_interval)
+    frames = Int64(round(length(t_saves)))-1
+    animate_phase_pdes_1d_plus(param,t_saves,fa_saves,fp_saves; frames = frames-1)
+end
+
+####
+
 
 function phase_args(phase_saves)
     cnts_phase = [phase_saves[1]]

@@ -138,7 +138,7 @@ pmap(perturb_pde_run_1d, params; distributed = true, batch_size=1, on_error=noth
 pmap(make_phase_video_1d, params; distributed = true, batch_size=1, on_error=nothing,)
 ######
 @unpack T, save_interval = param
-frames = 100
+frames = 1000
 save_interval = T/frames
 t_saves, fa_saves, fp_saves = load_pdes_1d(param,T; save_interval = save_interval)
 

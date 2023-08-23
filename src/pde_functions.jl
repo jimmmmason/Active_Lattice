@@ -209,16 +209,16 @@ function p(x::Float64;logtol = 1e-10, γ =0.)
         elseif x ≥ 1.
             x = 1. -logtol
         end
-        a::Float64 = π/2 -1
-        coeff =[-1-2*a-γ-2*a*γ, 1+3*a+2*a^2,-4*a^2 ,-a+2*a^2];
-        rts::Vector{ComplexF64}= roots(Polynomial(coeff))
-        w = -(1/(1 + γ))*γ*log(x)
-        for r in rts
-            denom = (1 + 3*a + 2 *a^2)+ (- 8* a^2)*r +(- 3 *a  + 6 *a^2 )*r^2
-            neum = (1 + 3*a + 2a^2 )+(-4*a^2 )*r +(-a + 2*a^2)*r^2
-            w += -(1/(1 + γ))*log(complex(x-r))*neum/denom
-        end
-        return real(w)
+        # a::Float64 = π/2 -1
+        # coeff =[-1-2*a-γ-2*a*γ, 1+3*a+2*a^2,-4*a^2 ,-a+2*a^2];
+        # rts::Vector{ComplexF64}= roots(Polynomial(coeff))
+        # w = -(1/(1 + γ))*γ*log(x)
+        # for r in rts
+        #     denom = (1 + 3*a + 2 *a^2)+ (- 8* a^2)*r +(- 3 *a  + 6 *a^2 )*r^2
+        #     neum = (1 + 3*a + 2a^2 )+(-4*a^2 )*r +(-a + 2*a^2)*r^2
+        #     w += -(1/(1 + γ))*log(complex(x-r))*neum/denom
+        # end
+        # return real(w)
     end
 end
 

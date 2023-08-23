@@ -168,10 +168,14 @@ function ap_MathieuMatrix_checker(ρa,ρp,Dx,Pe,Dθ; k::Int64 = 10, ω = [2π, 0
         for v in 1:(2*k)
                 if abs(u - v) == 2
                     matrix[u, v] = q[1]
-                elseif v - u == 1
+                elseif (v - u == 3)&( (floor(u/2) +0.) == (u/2 -1/2) )
                     matrix[u, v] = q[2]
-                elseif v - u == -1
-                        matrix[u, v] = -q[2]
+                elseif (v - u == -1)&( (floor(u/2) +0.) == (u/2 -1/2) )
+                    matrix[u, v] = -q[2]
+                elseif (v - u == 1)&( (floor(u/2) +0.) == (u/2+0.) )
+                    matrix[u, v] = -q[2]
+                elseif (v - u == -3)&( (floor(u/2) +0.) == (u/2+0.) )
+                    matrix[u, v] = q[2]
                 elseif u == v
                     matrix[u, v] = p - Dθ*( floor(u/2))^2 
                 end
@@ -206,13 +210,14 @@ function ap_MathieuEigen_checker(matrix)
     return Egs.values, Egs.vectors
 end 
 
-function ap_MathieuEigen_lite_checker(matrix; k=20)
-    return  eigvals(matrix)[4]
+function ap_MathieuEigen_lite_checker(matrix)
+    Egs = eigen(matrix)
+    return maximum(real.(Egs.values))
 end
 
-function ap_lin_stab_line_checker(ρa,ρp; Dx =1. ,Pe = 50., Dθ = 100., k = 40 )
-    matrix = ap_MathieuMatrix_checker(ρa,ρp,Dx,Pe,Dθ; k = k);
-    amin = ap_MathieuEigen_lite_checker(matrix; k = k)  
+function ap_lin_stab_line_checker(ρa,ρp; Dx =1. ,Pe = 50., Dθ = 100., k = 40, ω = [2π, 0])
+    matrix = ap_MathieuMatrix_checker(ρa,ρp,Dx,Pe,Dθ; k = k, ω = ω);
+    amin = ap_MathieuEigen_lite_checker(matrix)  
     return real(amin)
 end
 
@@ -225,9 +230,7 @@ end
 function lin_stab_line_fraction_checker(ρ,χ; Dx =1. ,Pe = 20., Dθ =100.,k=40, ω = [2*π,0] )
     ρa = χ*ρ
     ρp = (1-χ)*ρ
-    matrix = ap_MathieuMatrix_checker(ρa,ρp,Dx,Pe,Dθ; k = k, ω = ω);
-    amin = ap_MathieuEigen_lite_checker(matrix; k = k)  
-    return real(amin)
+    return ap_lin_stab_line_checker(ρa,ρp; Dx =Dx ,Pe = Pe, Dθ = Dθ, k = k, ω = ω)
 end
 
 

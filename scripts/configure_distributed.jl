@@ -9,7 +9,7 @@ ssh jm2386@ssh.maths.cam.ac.uk
 wake cherry
 wake cyllene
 wake orthosie
-wake refract
+wake refract 
 
 ssh cherry
 exit
@@ -23,14 +23,14 @@ exit
 #addprocs([("cherry",:auto)])
 #addprocs([("cyllene",:auto)])
 #addprocs([("indium",:auto)])
-#addprocs([("orthosie",:auto)])
-addprocs([("refract",1)])
+addprocs([("adrastea",3)])
+addprocs([("refract",3)])
 addprocs([("radius",3)])
 #addprocs([("teryas",6)])
 #addprocs([("eloquence",4)])
 addprocs([("heart",3)])
 addprocs([("kenku",4)])
-addprocs([("leona",3)])
+addprocs([("leona",10)])
 addprocs([("saz",3)])
 
 ###
@@ -41,9 +41,8 @@ rmprocs()
 rmprocs([8,12,14])
 
 
-@distributed for i in 1:nworkers()
-    host = gethostname()
-    println(host)
+@distributed for i in 1:2
+    Pkg.add("DrWatson")
 end
 nworkers()
 

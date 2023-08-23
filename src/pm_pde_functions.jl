@@ -6,7 +6,7 @@ println("Loading ...")
 using StatsBase, DataStructures, UnPack, LinearAlgebra, Random, TensorOperations, StaticArrays
 
 
-function pde_param_1d(; name = "test", D =1. , Pe =1. ,ρa = 0.5, ρp = 0.0, Nx = 100, Nθ = 100, δt = 1e-5, Dθ = 10, T= 0.001, save_interval = 0.01, max_steps = 1e8, max_runs = 6, λ_step = 10., λmax = 100., λs = 20.:20.:100., pert = "n=1", δ = 0.01)
+function pde_param_pm(; name = "test", D =1. , Pe =1. ,ρa = 0.5, ρp = 0.0, Nx = 100, Nθ = 2, δt = 1e-5, Dθ = 10, T= 0.001, save_interval = 0.01, max_steps = 1e8, max_runs = 6, λ_step = 10., λmax = 100., λs = 20.:20.:100., pert = "n=1", δ = 0.01)
     S  = [ θ for θ in 1:Nθ]
     E = [[1,0],[0,1],[0,-1],[-1,0],]
     λ = Pe*sqrt(Dθ)
@@ -16,7 +16,7 @@ function pde_param_1d(; name = "test", D =1. , Pe =1. ,ρa = 0.5, ρp = 0.0, Nx 
     return param
 end
 
-function initialize_density_1d(param::Dict{String,Any})
+function initialize_density_pm(param::Dict{String,Any})
     @unpack name, D, λ, ρa, ρp, δt, Nx, Nθ, S,  E= param
     density = Dict{String,Any}()
     fa = fill(ρa/(2π),(Nx,Nθ))
@@ -28,7 +28,7 @@ end
 
 ## 
 
-function midpoint_bond_diff_1d(f::Array{Float64,1}; Nx::Int64 = 100) 
+function midpoint_bond_diff_pm(f::Array{Float64,1}; Nx::Int64 = 100) 
 
     grad_f::Array{Float64,1} = zeros(Nx)
 
@@ -40,7 +40,7 @@ function midpoint_bond_diff_1d(f::Array{Float64,1}; Nx::Int64 = 100)
     return grad_f
 end
 
-function midpoint_bond_diff_θ_1d(f::Array{Float64,2}; Nx::Int64 = 100,  Nθ::Int64 = 100) 
+function midpoint_bond_diff_θ_pm(f::Array{Float64,2}; Nx::Int64 = 100,  Nθ::Int64 = 2) 
 
     grad_f::Array{Float64,2} = zeros(Nx,Nθ)
 
@@ -52,7 +52,7 @@ function midpoint_bond_diff_θ_1d(f::Array{Float64,2}; Nx::Int64 = 100,  Nθ::In
     return grad_f
 end
 
-function midpoint_bond_av_1d(f::Array{Float64,1}; Nx::Int64 = 100) 
+function midpoint_bond_av_pm(f::Array{Float64,1}; Nx::Int64 = 100) 
     av_f::Array{Float64,1}= zeros(Nx)
 
     for x₁ in 1:Nx
@@ -63,7 +63,7 @@ function midpoint_bond_av_1d(f::Array{Float64,1}; Nx::Int64 = 100)
     return av_f
 end
 
-function midpoint_Θ_diff_1d(f::Array{Float64,2}; Nx::Int64 = 100,  Nθ::Int64 = 100) 
+function midpoint_Θ_diff_pm(f::Array{Float64,2}; Nx::Int64 = 100,  Nθ::Int64 = 2) 
     grad_f::Array{Float64,2} = zeros(Nx, Nθ)
 
     for θ in 1:Nθ
@@ -73,7 +73,7 @@ function midpoint_Θ_diff_1d(f::Array{Float64,2}; Nx::Int64 = 100,  Nθ::Int64 =
     return grad_f
 end
 
-function site_div_1d(f::Array{Float64,1}; Nx::Int64 = 100) 
+function site_div_pm(f::Array{Float64,1}; Nx::Int64 = 100) 
 
     div_f::Array{Float64,1} = zeros(Nx)
 
@@ -85,7 +85,7 @@ function site_div_1d(f::Array{Float64,1}; Nx::Int64 = 100)
     return div_f
 end
 
-function site_div_θ_1d(f::Array{Float64,2}; Nx::Int64 = 100,  Nθ::Int64 = 100) 
+function site_div_θ_pm(f::Array{Float64,2}; Nx::Int64 = 100,  Nθ::Int64 = 2) 
 
     div_f::Array{Float64,2} = zeros(Nx, Nθ)
 
@@ -98,13 +98,13 @@ function site_div_θ_1d(f::Array{Float64,2}; Nx::Int64 = 100,  Nθ::Int64 = 100)
     return div_f
 end
 
-function site_θ_diff_1d(f::Array{Float64,2}; Nx::Int64 = 100,  Nθ::Int64 = 100) 
+function θ_diff_pm(f::Array{Float64,2}; Nx::Int64 = 100,  Nθ::Int64 = 2) 
 
     div_f::Array{Float64,2} = zeros(Nx, Nθ)
 
     for θ in 1:Nθ
         ϕ ::Int64 = ((θ % Nθ) +1)
-        div_f[:,ϕ] += Nθ*(f[:,ϕ]-f[:,θ])/(2*π)
+        div_f[:,ϕ] += (f[:,ϕ]-f[:,θ])
     end
 
     return div_f
@@ -128,7 +128,7 @@ function self_diff_prime(ρ::Float64)
     return - ( α*(2*α-1)/(2*α+1)*ρ.^2 - α*ρ .+1) + ( -ρ .+1)*(2*α*(2*α-1)/(2*α+1)*ρ - α );
 end
 
-function mag_1d(f::Array{Float64,2}; Nθ = 50, Nx =100)
+function mag_pm(f::Array{Float64,2}; Nθ = 50, Nx =100)
     eθ::Array{Float64,1} = cos.((1:Nθ)*2π/Nθ);
     m = Array{Float64,1}(undef, Nx);
     @tensor begin
@@ -137,15 +137,15 @@ function mag_1d(f::Array{Float64,2}; Nθ = 50, Nx =100)
     return 2*π*m/Nθ
 end
 
-function coeff_mag_s_1d(f::Array{Float64,2},ρ::Array{Float64,1}; Nθ::Int64 = 100,  Nx::Int64 = 100,γ::Float64 = 0.0)
-    m    ::Array{Float64,1} = mag_1d(f; Nθ=Nθ, Nx=Nx );
+function coeff_mag_s_pm(f::Array{Float64,2},ρ::Array{Float64,1}; Nθ::Int64 = 2,  Nx::Int64 = 100,γ::Float64 = 0.0)
+    m    ::Array{Float64,1} = mag_pm(f; Nθ=Nθ, Nx=Nx );
     ds   ::Array{Float64,1} = self_diff.(ρ; γ=γ);
     s    ::Array{Float64,1} = coeff_s.(ρ,ds);
     mag_s::Array{Float64,1} = s.*m
     return mag_s
 end
 #functon p is labelled W in the pdf
-# using Polynomials
+
 function p(x::Float64;logtol = 1e-10, γ =0.)
     if γ ==0.
         if x <0.
@@ -159,11 +159,11 @@ function p(x::Float64;logtol = 1e-10, γ =0.)
         p2::Float64 = -2  +2*π  -(-2+π)*(-1+π)*x  +(-3+π)*(-2+π)*x^2
         return c3*log(-1-c2*p1)  -c3*log(1-c2*p1)  +(1 -π)*log(1-x)   + 0.5*(-2+π)*log(p2)
     else
-        if x <0.
-            x = logtol
-        elseif x ≥ 1.
-            x = 1. -logtol
-        end
+        # if x <0.
+        #     x = logtol
+        # elseif x ≥ 1.
+        #     x = 1. -logtol
+        # end
         # a::Float64 = π/2 -1
         # coeff =[-1-2*a-γ-2*a*γ, 1+3*a+2*a^2,-4*a^2 ,-a+2*a^2];
         # rts::Vector{ComplexF64}= roots(Polynomial(coeff))
@@ -177,9 +177,9 @@ function p(x::Float64;logtol = 1e-10, γ =0.)
     end
 end
 
-function mob_1d(fa::Array{Float64,2}, fp::Array{Float64,1}, ρ::Array{Float64,1}; γ::Float64 =0.)
+function mob_pm(fa::Array{Float64,2}, fp::Array{Float64,1}, ρ::Array{Float64,1}; γ::Float64 =0.)
     ds::Array{Float64,1} = self_diff.(ρ; γ = γ )
-    return fa.*ds, fp.*ds, fa
+    return fa.*ds, fp.*ds
 end
 
 function upwind(U::Float64, mb_down::Float64, mb_up::Float64)
@@ -188,7 +188,7 @@ end
 
 ##
 
-function U_velocities_1d(fa::Array{Float64,2}, fp::Array{Float64,1}, ρ::Array{Float64,1}; Nx::Int64 =100, Nθ::Int64 =100, λ::Float64 = 10., γ::Float64=0.)
+function U_velocities_pm(fa::Array{Float64,2}, fp::Array{Float64,1}, ρ::Array{Float64,1}; Nx::Int64 =100, Nθ::Int64 =100, λ::Float64 = 10., γ::Float64=0.)
     logtol::Float64 = log(1e-10);
 
     eθ:: Array{Float64,2} = reshape(cos.((1:Nθ)*2π/Nθ),1,Nθ)
@@ -197,18 +197,18 @@ function U_velocities_1d(fa::Array{Float64,2}, fp::Array{Float64,1}, ρ::Array{F
     logmfp::Array{Float64,1} = map(x -> (x>0 ? log(x) : logtol), fp);
     p_rho ::Array{Float64,1} = p.(ρ;γ=γ) #functon p is labelled W in the pdf
 
-    Ua::Array{Float64,2}  = -midpoint_bond_diff_θ_1d(logmfa .+ p_rho; Nx=Nx, Nθ=Nθ).+ λ*midpoint_bond_av_1d(coeff_mag_s_1d(fa,ρ; Nθ=Nθ, Nx=Nx,γ=γ ); Nx =Nx ) .+ λ*eθ 
-    Up::Array{Float64,1}  = -midpoint_bond_diff_1d(  logmfp  + p_rho; Nx=Nx       ) + λ*midpoint_bond_av_1d(coeff_mag_s_1d(fa,ρ; Nθ=Nθ, Nx=Nx,γ=γ ); Nx =Nx )
-    Uθ::Array{Float64,2}  = -midpoint_Θ_diff_1d(fa; Nx=Nx, Nθ = Nθ)
+    Ua::Array{Float64,2}  = -midpoint_bond_diff_θ_pm(logmfa .+ p_rho; Nx=Nx, Nθ=Nθ).+ λ*midpoint_bond_av_pm(coeff_mag_s_pm(fa,ρ; Nθ=Nθ, Nx=Nx,γ=γ ); Nx =Nx ) .+ λ*eθ 
+    Up::Array{Float64,1}  = -midpoint_bond_diff_pm(  logmfp  + p_rho; Nx=Nx       ) + λ*midpoint_bond_av_pm(coeff_mag_s_pm(fa,ρ; Nθ=Nθ, Nx=Nx,γ=γ ); Nx =Nx )
+    #Uθ::Array{Float64,2}  = -midpoint_Θ_diff_pm(fa; Nx=Nx, Nθ = Nθ)
 
-    return Ua, Up, Uθ
+    return Ua, Up #, Uθ
 end
 
 
-function F_fluxes_1d(Ua::Array{Float64,2}, Up::Array{Float64,1}, Uθ::Array{Float64,2}, moba::Array{Float64,2}, mobp::Array{Float64,1}, mobθ::Array{Float64,2}; Nx::Int64 =100, Nθ::Int64 =100 )
+function F_fluxes_pm(Ua::Array{Float64,2}, Up::Array{Float64,1}, moba::Array{Float64,2}, mobp::Array{Float64,1}; Nx::Int64 =100, Nθ::Int64 =100 )
     Fa ::Array{Float64,2} = zeros(Nx,Nθ);
     Fp ::Array{Float64,1} = zeros(Nx);
-    Fθ ::Array{Float64,2} = zeros(Nx,Nθ);
+    # Fθ ::Array{Float64,2} = zeros(Nx,Nθ);
     for x₁ in 1:Nx
         local y₁
         ## 1 direction
@@ -216,40 +216,39 @@ function F_fluxes_1d(Ua::Array{Float64,2}, Up::Array{Float64,1}, Uθ::Array{Floa
         Fa[x₁,:] = upwind.(Ua[x₁,:], moba[x₁,:], moba[y₁,:])
         Fp[x₁]   = upwind( Up[x₁]  , mobp[x₁],   mobp[y₁]  )
     end
-    for θ in 1:Nθ
-        local ϕ 
-        ϕ::Int64 = ((θ % Nθ) +1)
-        Fθ[:,θ] = upwind.(Uθ[:,θ], mobθ[:,θ], mobθ[:,ϕ])
-    end
-    return Fa, Fp, Fθ
+    # for θ in 1:Nθ
+    #     local ϕ 
+    #     ϕ::Int64 = ((θ % Nθ) +1)
+    #     Fθ[:,θ] = upwind.(Uθ[:,θ], mobθ[:,θ], mobθ[:,ϕ])
+    # end
+    return Fa, Fp #, Fθ
 end
 
 ##
 
-function time_stepper_1d(fa::Array{Float64,2}, fp::Array{Float64,1}, δt::Float64; Nx::Int64 =100, Nθ::Int64 =100, λ::Float64 = 10., Dθ::Float64 = 10.,γ::Float64=0.)
+function time_stepper_pm(fa::Array{Float64,2}, fp::Array{Float64,1}, δt::Float64; Nx::Int64 =100, Nθ::Int64 =100, λ::Float64 = 10., Dθ::Float64 = 10.,γ::Float64=0.)
     ρ::Array{Float64,1} = fp + sum(fa; dims =2)[:,1].*(2*π/Nθ)
     
-    Ua::Array{Float64,2},   Up::Array{Float64,1},   Uθ::Array{Float64,2}   = U_velocities_1d(fa,fp,ρ; Nx=Nx, Nθ=Nθ, λ=λ,γ=γ)
-    moba::Array{Float64,2}, mobp::Array{Float64,1}, mobθ::Array{Float64,2} = mob_1d(fa,fp,ρ;γ=γ)
-    Fa::Array{Float64,2},   Fp::Array{Float64,1},   Fθ::Array{Float64,2}   = F_fluxes_1d(Ua, Up, Uθ, moba, mobp, mobθ; Nx=Nx, Nθ=Nθ)
+    Ua::Array{Float64,2},   Up::Array{Float64,1}   = U_velocities_pm(fa,fp,ρ; Nx=Nx, Nθ=Nθ, λ=λ,γ=γ)
+    moba::Array{Float64,2}, mobp::Array{Float64,1} = mob_pm(fa,fp,ρ;γ=γ)
+    Fa::Array{Float64,2},   Fp::Array{Float64,1}  = F_fluxes_pm(Ua, Up, moba, mobp; Nx=Nx, Nθ=Nθ)
     
     a::Float64 = maximum(abs.(Ua));
     b::Float64 = maximum(abs.(Up));
-    c::Float64 = maximum(abs.(Uθ));
     
     tempu::Float64 = 1/(6*max(a*Nx, b*Nx, c*Nθ*Dθ/(2*π)));
     dt::Float64= min(δt, tempu)
 
-    fa -= dt*( site_div_θ_1d(Fa; Nx=Nx, Nθ=Nθ) + Dθ*site_θ_diff_1d(Fθ; Nx=Nx, Nθ=Nθ))
-    fp -= dt*site_div_1d(Fp; Nx=Nx)
+    fa -= dt*( site_div_θ_pm(Fa; Nx=Nx, Nθ=Nθ) + Dθ*θ_diff_pm(fa; Nx=Nx, Nθ=Nθ))
+    fp -= dt*site_div_pm(Fp; Nx=Nx)
 
     return fa, fp, dt
 end
 
-function pde_stepper_1d!(param::Dict{String,Any}, density::Dict{String,Any})
+function pde_stepper_pm!(param::Dict{String,Any}, density::Dict{String,Any})
     @unpack δt, Nx, Nθ, Dθ, λ,γ = param
     @unpack fa, fp, t = density
-    fa, fp , dt = time_stepper_1d(fa, fp, δt; Nx=Nx, Nθ=Nθ, λ=λ, Dθ=Dθ,γ=γ)
+    fa, fp , dt = time_stepper_pm(fa, fp, δt; Nx=Nx, Nθ=Nθ, λ=λ, Dθ=Dθ,γ=γ)
     t::Float64 += dt
 
     @pack! density = fa, fp, t
@@ -258,7 +257,7 @@ end
 
 ##
 
-function run_pde_until_1d!(param::Dict{String,Any},density::Dict{String,Any},T; save_on =false, max_steps = 100, save_interval = 1.)
+function run_pde_until_pm!(param::Dict{String,Any},density::Dict{String,Any},T; save_on =false, max_steps = 100, save_interval = 1.)
     @unpack name, Nx, Nθ, λ, ρa, ρp, δt, Dθ = param
     if save_on
         @unpack t = density
@@ -269,7 +268,7 @@ function run_pde_until_1d!(param::Dict{String,Any},density::Dict{String,Any},T; 
         while density["t"] < T 
                 time_since_save = 0.
                 while time_since_save < min(save_interval, T)
-                    dt = pde_stepper_1d!(param,density)
+                    dt = pde_stepper_pm!(param,density)
                     time_since_save += dt 
                 end
                 if save_on
@@ -283,7 +282,7 @@ function run_pde_until_1d!(param::Dict{String,Any},density::Dict{String,Any},T; 
         while (density["t"] < T)&(steps < max_steps)
             time_since_save = 0.
             while (time_since_save < min(save_interval, T))&(steps < max_steps)
-                dt = pde_stepper_1d!(param,density)
+                dt = pde_stepper_pm!(param,density)
                 time_since_save += dt 
                 steps += 1
             end
@@ -302,7 +301,7 @@ function run_pde_until_1d!(param::Dict{String,Any},density::Dict{String,Any},T; 
     end
 end
 
-function perturb_pde_1d!(param::Dict{String,Any}, density::Dict{String,Any}; δ = 0.01, pert = "n=2")
+function perturb_pde_pm!(param::Dict{String,Any}, density::Dict{String,Any}; δ = 0.01, pert = "n=2")
     @unpack Nx, S, ρa, ρp, λ, Dθ, Nx, Nθ,Dx,Pe,Dθ,k, γ = param
     @unpack fa, fp = density
     ρ = ρa + ρp
@@ -317,7 +316,7 @@ function perturb_pde_1d!(param::Dict{String,Any}, density::Dict{String,Any}; δ 
             ω = 2*π
             a, A = ap_MathieuEigen(matrix)
             Pa = (x,θ) -> real.( dot(A[2:1:(k+1),k+1],cos.(θ*K*(2*π/Nθ)))*exp(-im*x*ω/Nx) )
-            Pp = (x) -> real.(A[1,k+1]*exp(im*x*ω/Nx));
+            Pp = (x) -> real.(A[1,k+1]*exp(-im*x*ω/Nx));
         else
             K = collect(0:1:(k-1))
             matrix = a_MathieuMatrix(ρa,ρp,Dx,Pe,Dθ; k=k, γ= γ)
@@ -332,50 +331,155 @@ function perturb_pde_1d!(param::Dict{String,Any}, density::Dict{String,Any}; δ 
         Pp = (x) -> δ*ρp*( rand() - 0.5 )/(ρp+0.01);
     end
     #
+    if pert == "safe_unif"
+        Pa = (x,θ) -> ( rand() - 0.5 )/(2*π);
+        Pp = (x) -> ( rand() - 0.5 );
+    end
+    #
     perta = zeros(Nx,Nθ)
     pertp = zeros(Nx)
-    for x₁ in 1:Nx, θ in S
-        perta[x₁, θ] += Pa(x₁, θ);
+    if pert == "safe_unif"
+        for x₁ in 1:Nx, θ in S
+            ρ = fp[x₁] + sum(fa[x₁,:])*2*π/Nθ
+            perta[x₁, θ] += min(10*δ, ρ*(1-ρ)/2)*Pa(x₁, θ)/2;
+        end
+        for x₁ in 1:Nx
+            ρ = fp[x₁] + sum(fa[x₁,:])*2*π/Nθ
+            pertp[x₁] += min(10*δ, ρ*(1-ρ)/2)*Pp(x₁)/2;
+        end
+    else
+        for x₁ in 1:Nx, θ in S
+            perta[x₁, θ] += Pa(x₁, θ);
+        end
+        for x₁ in 1:Nx
+            pertp[x₁] += Pp(x₁);
+        end
+        if pert == "rand"
+            perta[:, 1:(Nθ-1)]  = 0.5*perta[:, 1:(Nθ-1)] + 0.5*perta[:, (Nθ-1):(-1):1] 
+        end
     end
-    for x₁ in 1:Nx
-        pertp[x₁] += Pp(x₁);
+
+    if pert == "safe_unif"
+        fa += perta
+        fp += pertp
+    else
+        c = dist_from_unif_pm(param, perta.+ρa/(2*π), pertp.+ρp)
+        fa += δ*perta/c
+        fp += δ*pertp/c
     end
-    if pert == "rand"
-        perta[:, 1:(Nθ-1)]  = 0.5*perta[:, 1:(Nθ-1)] + 0.5*perta[:, (Nθ-1):(-1):1] 
-    end
-    c = dist_from_unif_1d(param, perta.+ρa/(2*π), pertp.+ρp)
-    fa += δ*perta/c
-    fp += δ*pertp/c
+
     @pack! density = fa, fp;
 end
 
-function perturb_pde_run_1d(param)
-    @unpack T, save_interval, max_steps, pert, δ = param
-    density = initialize_density_1d(param)
-    perturb_pde_1d!(param,density; pert = pert, δ = δ);
-    run_pde_until_1d!(param,density,T; save_on = true, max_steps = max_steps, save_interval = save_interval)
+function nudge_pde_pm!(param::Dict{String,Any}, density::Dict{String,Any}; δ = 0.01)
+    @unpack Nx, S, ρa, ρp, λ, Dθ, Nx, Nθ,Dx,Pe,Dθ,k, γ = param
+    @unpack fa, fp = density
+
+    ρ = fp + sum(fa; dims = 2)[:,1]*2*π/Nθ
+    x0 = argmax(ρ)
+
+    K = collect(0:1:(k-1))
+    matrix = ap_MathieuMatrix(ρa,ρp,Dx,Pe,Dθ; k=k, γ= γ)
+    ω = 2*π
+    a, A = ap_MathieuEigen(matrix)
+    Pa = (x,θ) -> real.( dot(A[2:1:(k+1),k+1],cos.(θ*K*(2*π/Nθ)))*exp(-im*x*ω/Nx) )
+    Pp = (x) -> real.(A[1,k+1]*exp(im*x*ω/Nx));
+    #A[:,k+1]
+    #
+    perta = zeros(Nx,Nθ)
+    pertp = zeros(Nx)
+
+    for x₁ in 1:Nx, θ in S
+        ρ = fp[x₁] + sum(fa[x₁,:])*2*π/Nθ
+        perta[x₁, θ] += min(δ, ρ*(1-ρ)/2)*Pa(x₁, θ)/5;
+    end
+    for x₁ in 1:Nx
+        ρ = fp[x₁] + sum(fa[x₁,:])*2*π/Nθ
+        pertp[x₁] += min(δ, ρ*(1-ρ)/2)*Pp(x₁)/5;
+    end
+
+    pert_ρ = pertp + sum(perta; dims = 2)[:,1]*2*π/Nθ
+    x1 = argmin(pert_ρ)
+
+    for x₁ in 1:Nx
+        x2 = x₁+(x1-x0)
+        if  x2<1
+            x = x2+Nx
+        elseif x2 > Nx
+            x = x2-Nx
+        else
+            x = x2
+        end
+
+        fp[x₁] += pertp[x]
+        for θ in S
+            fa[x₁, θ] += perta[x, θ]
+        end
+    end
+
+    @pack! density = fa, fp;
 end
 
-
-function load_pde_run_1d(param)
+function perturb_pde_run_pm(param)
     @unpack T, save_interval, max_steps, pert, δ = param
-    density = initialize_density_1d(param)
+    density = initialize_density_pm(param)
+    perturb_pde_pm!(param,density; pert = pert, δ = δ);
+    run_pde_until_pm!(param,density,T; save_on = true, max_steps = max_steps, save_interval = save_interval)
+end
+
+function repeating_perturb_pde_run_pm(param)
+    @unpack T, save_interval, max_steps, pert, δ, pert_interval = param
+    density = initialize_density_pm(param)
+    t = 0.
+    perturb_pde_pm!(param,density; pert = pert, δ = δ);
+    while t<T
+        run_pde_until_pm!(param,density,t+pert_interval; save_on = true, max_steps = max_steps, save_interval = save_interval)
+        nudge_pde_pm!(param,density; δ = δ);
+        t += pert_interval
+    end
+end
+
+function load_pde_run_pm(param)
+    @unpack T, save_interval, max_steps, pert, δ = param
+    density = initialize_density_pm(param)
     try
-        t_saves, fa_saves, fp_saves = load_pdes_1d(param,T; save_interval = 10*save_interval, start_time = 10*save_interval)
+        t_saves, fa_saves, fp_saves = load_pdes_pm(param,T; save_interval = 10*save_interval, start_time = 10*save_interval)
         k = length(t_saves)
         t, fa, fp = t_saves[k], fa_saves[k], fp_saves[k]
         @pack! density = t, fa, fp
         println("loaded t = $(t)")
     catch
         println("load failed")
-        perturb_pde_1d!(param,density; pert = pert, δ = δ);
+        perturb_pde_pm!(param,density; pert = pert, δ = δ);
     end
-    run_pde_until_1d!(param,density,T; save_on = true, max_steps = max_steps, save_interval = save_interval)
+    run_pde_until_pm!(param,density,T; save_on = true, max_steps = max_steps, save_interval = save_interval)
 end
+
+function load_pde_nudge_run_pm(param)
+    @unpack T, save_interval, max_steps, pert, δ, pert_interval = param
+    density = initialize_density_pm(param)
+    t = 0.
+    try
+        t_saves, fa_saves, fp_saves = load_pdes_pm(param,T; save_interval = 10*save_interval, start_time = 10*save_interval)
+        k = length(t_saves)
+        t, fa, fp = t_saves[k], fa_saves[k], fp_saves[k]
+        @pack! density = t, fa, fp
+        println("loaded t = $(t)")
+    catch
+        println("load failed")
+        perturb_pde_pm!(param,density; pert = pert, δ = δ);
+    end
+    while t<T
+        run_pde_until_pm!(param,density,t+pert_interval; save_on = true, max_steps = max_steps, save_interval = save_interval)
+        nudge_pde_pm!(param,density; δ = δ);
+        t += pert_interval
+    end
+end
+
 
 #=
 for i in 1:100
-pde_stepper_1d!(param,density)
+pde_stepper_pm!(param,density)
 end
 fig, ax = PyPlot.subplots(figsize =(10, 10))
 @unpack fa, fp, t = density
@@ -386,18 +490,18 @@ t
 ##
 #phase seperation metircs
 
-function dist_from_unif_1d(param, fa, fp)
+function dist_from_unif_pm(param, fa, fp)
     @unpack name, Nx, Nθ, λ, ρa, ρp, δt = param
 
     #=
-    grad_fa = midpoint_bond_diff_θ_1d(fa; Nx = Nx,  Nθ = Nθ) 
-    grad_fp =  midpoint_bond_diff_1d(fp; Nx = Nx)
-    grad_grad_fa = midpoint_bond_diff_θ_1d(grad_fa; Nx = Nx,  Nθ = Nθ) 
-    grad_grad_fp =  midpoint_bond_diff_1d(grad_fp; Nx = Nx) 
+    grad_fa = midpoint_bond_diff_θ_pm(fa; Nx = Nx,  Nθ = Nθ) 
+    grad_fp =  midpoint_bond_diff_pm(fp; Nx = Nx)
+    grad_grad_fa = midpoint_bond_diff_θ_pm(grad_fa; Nx = Nx,  Nθ = Nθ) 
+    grad_grad_fp =  midpoint_bond_diff_pm(grad_fp; Nx = Nx) 
 
-    partialθ_fa = midpoint_Θ_diff_1d(fa; Nx = Nx,  Nθ = Nθ)
-    mixD_fa = midpoint_Θ_diff_1d(grad_fa; Nx = Nx,  Nθ = Nθ)
-    partial_partialθ_fa = midpoint_Θ_diff_1d(partialθ_fa; Nx = Nx,  Nθ = Nθ)
+    partialθ_fa = midpoint_Θ_diff_pm(fa; Nx = Nx,  Nθ = Nθ)
+    mixD_fa = midpoint_Θ_diff_pm(grad_fa; Nx = Nx,  Nθ = Nθ)
+    partial_partialθ_fa = midpoint_Θ_diff_pm(partialθ_fa; Nx = Nx,  Nθ = Nθ)
     =#
     L2 = 2*π*sum( (fa .- ρa/(2*π) ).^2)/(Nx*Nθ) + sum( (fp .- ρp).^2)/(Nx)
     #=
@@ -414,19 +518,44 @@ function dist_from_unif_1d(param, fa, fp)
     return sqrt(L2) 
 end
 
-function time_dist_from_unif_1d(param, fa_saves, fp_saves)
+function dist_between_pm(param, fa1, fp1, fa2, fp2)
+    @unpack name, Nx, Nθ, λ, ρa, ρp, δt = param
+
+    L2 = 2*π*sum( (fa1- fa2 ).^2)/(Nx*Nθ) + sum( (fp1 - fp2).^2)/(Nx)
+  
+    return sqrt(L2) 
+end
+
+function time_dist_from_past_pm(param, fa_saves, fp_saves, skip)
+    N = length(fa_saves)
+    dist_saves = zeros(N-skip)
+    for n in 1:(N-skip)
+        fa1 = fa_saves[n]
+        fa2 = fa_saves[n+skip]
+        fp1 = fp_saves[n]
+        fp2 = fp_saves[n+skip]
+        dist_saves[n] = dist_between_pm(param, fa1, fp1, fa2, fp2)
+    end
+    return dist_saves
+end
+
+function time_dist_from_unif_pm(param, fa_saves, fp_saves)
     n = length(fa_saves)
     dist_saves = zeros(n)
     for i in 1:n
-        dist_saves[i] = dist_from_unif_1d(param, fa_saves[i], fp_saves[i])
+        dist_saves[i] = dist_from_unif_pm(param, fa_saves[i], fp_saves[i])
     end
     return dist_saves
 end
 
 # loading
+using Pkg
+Pkg.add("JLD2")
+using JLD2
 
-function load_pdes_1d(param::Dict{String,Any},T; save_interval = 1., start_time = 0.)
-    @unpack name, Nx, Nθ, λ, ρa, ρp, δt = param
+
+function load_pdes_pm(param::Dict{String,Any},T; save_interval = 1., start_time = 0.)
+    @unpack name, Nx, Nθ, λ, ρa, ρp, δt, Dθ = param
     t = start_time
     fa_saves = []
     fp_saves = []
@@ -458,7 +587,7 @@ function λsym(ϕ::Float64; Dθ::Float64 = 10., Dx = 1.)
     return  sqrt(8*Dx)*sqrt(1+2*α)*sqrt(expr1)/expr2
 end
 
-function refresh_stab_data_1d(;stabdata = Dict{String,Any}(), ρs = 0.05:0.05:0.95,   Dθ = 10., Nx = 50, Nθ = 20, λs = 5.:5.:100., name = "high_density_stability_v4", save_on = true, t_end = 1.0, ρp = 0.)
+function refresh_stab_data_pm(;stabdata = Dict{String,Any}(), ρs = 0.05:0.05:0.95,   Dθ = 10., Nx = 50, Nθ = 20, λs = 5.:5.:100., name = "high_density_stability_v4", save_on = true, t_end = 1.0, ρp = 0.)
     filename = "/store/DAMTP/jm2386/Active_Lattice/data/pde_pro/$(name)/stability_Nx=$(Nx)_Nθ=$(Nθ)_Dθ=$(Dθ)_ρp=$(ρp).jld2"
     if save_on
         try 
@@ -477,12 +606,12 @@ function refresh_stab_data_1d(;stabdata = Dict{String,Any}(), ρs = 0.05:0.05:0.
         #load ans
         for λ ∈ λs
             try
-                param = pde_param_1d(;name = name, Pe = λ/sqrt(Dθ) , ρa = ρ-ρp, ρp = ρp, T = 1.0, Dθ = Dθ, δt = 1e-5, Nx = Nx, Nθ = Nθ, save_interval = 0.01, max_steps = 1e8)
-                t_saves, fa_saves, fp_saves = load_pdes_1d(param,0.02; save_interval = 0.001, start_time = 0.0)
+                param = pde_param_pm(;name = name, Pe = λ/sqrt(Dθ) , ρa = ρ-ρp, ρp = ρp, T = 1.0, Dθ = Dθ, δt = 1e-5, Nx = Nx, Nθ = Nθ, save_interval = 0.01, max_steps = 1e8)
+                t_saves, fa_saves, fp_saves = load_pdes_pm(param,0.02; save_interval = 0.001, start_time = 0.0)
 
-                stab_dsit0 = dist_from_unif_1d(param, fa_saves[1], fp_saves[1])
+                stab_dsit0 = dist_from_unif_pm(param, fa_saves[1], fp_saves[1])
 
-                stab_dsit1 = dist_from_unif_1d(param, fa_saves[2], fp_saves[2])
+                stab_dsit1 = dist_from_unif_pm(param, fa_saves[2], fp_saves[2])
 
                 #=
                 if (stab_dsit0>stab_dsit1)&(λ ∉ lin_stab)
@@ -493,10 +622,10 @@ function refresh_stab_data_1d(;stabdata = Dict{String,Any}(), ρs = 0.05:0.05:0.
                     #break
             end
             try
-                    param = pde_param_1d(;name = name, Pe = λ/sqrt(Dθ) , ρa = ρ-ρp, ρp = ρp, T = 1.0, Dθ = Dθ, δt = 1e-5, Nx = Nx, Nθ = Nθ, save_interval = 0.01, max_steps = 1e8)
-                    t_saves, fa_saves, fp_saves = load_pdes_1d(param,t_end; save_interval = 0.001, start_time = (t_end-0.02))
+                    param = pde_param_pm(;name = name, Pe = λ/sqrt(Dθ) , ρa = ρ-ρp, ρp = ρp, T = 1.0, Dθ = Dθ, δt = 1e-5, Nx = Nx, Nθ = Nθ, save_interval = 0.01, max_steps = 1e8)
+                    t_saves, fa_saves, fp_saves = load_pdes_pm(param,t_end; save_interval = 0.001, start_time = (t_end-0.02))
 
-                    stab_dsit = dist_from_unif_1d(param, fa_saves[1], fp_saves[1])
+                    stab_dsit = dist_from_unif_pm(param, fa_saves[1], fp_saves[1])
 
                     if (stab_dsit>0.02)&(λ ∉ unstable)
                         push!(unstable,  λ)
@@ -559,7 +688,7 @@ function refresh_stab_data_1d(;stabdata = Dict{String,Any}(), ρs = 0.05:0.05:0.
     return stabdata
 end
 
-function next_param_1d(stabdata, param; λmax = 1e8, λ_step = 10.)
+function next_param_pm(stabdata, param; λmax = 1e8, λ_step = 10.)
     @unpack ρa, Dθ, = param
     stable = []
     unstable = [] 
@@ -605,7 +734,7 @@ function next_param_1d(stabdata, param; λmax = 1e8, λ_step = 10.)
     return unfinished, approx_next, param
 end
 
-function run_stab_search_1d(param)
+function run_stab_search_pm(param)
     @unpack name, Nx, Nθ, max_runs, λ_step, ρa, Dθ, Nx, Nθ, λmax, λs = param
     filename = "/store/DAMTP/jm2386/Active_Lattice/data/pde_pro/$(name)/stability_Nx=$(Nx)_Nθ=$(Nθ).jld2"
     stabdata = Dict{String,Any}()
@@ -620,11 +749,11 @@ function run_stab_search_1d(param)
     i = 0
     unfinished = true
     while  (i < max_runs)&unfinished
-        unfinished, λ_next, param = next_param_1d(stabdata, param; λ_step = λ_step, λmax=λmax)
+        unfinished, λ_next, param = next_param_pm(stabdata, param; λ_step = λ_step, λmax=λmax)
         if unfinished
                 println("running λ = $(λ_next) ρ = $(ρa)")
-                perturb_pde_run_1d(param)
-                stabdata = refresh_stab_data_1d(;stabdata = stabdata,  ρs = [ρa],   Dθ = Dθ, Nx = Nx, Nθ = Nθ, λs = λs , name = name, save_on = false)
+                perturb_pde_run_pm(param)
+                stabdata = refresh_stab_data_pm(;stabdata = stabdata,  ρs = [ρa],   Dθ = Dθ, Nx = Nx, Nθ = Nθ, λs = λs , name = name, save_on = false)
                 println("finished λ = $(λ_next) ρ = $(ρa)")
         end
         i += 1 
@@ -636,7 +765,7 @@ function run_stab_search_1d(param)
     return ρa, stabdata["ρ = $(ρa)"]
 end
 
-function run_stab_search_stupid_mode_1d(param)
+function run_stab_search_stupid_mode_pm(param)
     @unpack name, Nx, Nθ, max_runs, λ_step, ρa, Dθ, Nx, Nθ, λmax, λs = param
     filename = "/store/DAMTP/jm2386/Active_Lattice/data/pde_pro/$(name)/stability_Nx=$(Nx)_Nθ=$(Nθ)_Dθ=$(Dθ).jld2"
     stabdata = Dict{String,Any}()
@@ -649,11 +778,11 @@ function run_stab_search_stupid_mode_1d(param)
     end
 
     i = 0
-    unfinished, λ_next, param = next_param_1d(stabdata, param; λ_step = λ_step, λmax=λmax)
+    unfinished, λ_next, param = next_param_pm(stabdata, param; λ_step = λ_step, λmax=λmax)
     while  (i < max_runs)&unfinished
         @unpack λ = param
         println("running λ = $(λ) ρ = $(ρa)")
-        perturb_pde_run_1d(param)
+        perturb_pde_run_pm(param)
         #stabdata = refresh_stab_data(;stabdata = stabdata,  ρs = [ρa],   Dθ = Dθ, Nx = Nx, Nθ = Nθ, λs = λs , name = name, save_on = false)
         println("finished λ = $(λ) ρ = $(ρa)")
         λ += λ_step
@@ -705,7 +834,7 @@ function U_velocities_sym(fa::Array{Float64,3}, fp::Array{Float64,2}, ρ::Array{
 
     Ua::Array{Float64,4}  = -midpoint_bond_diff_θ(logmfa .+ p_rho; Nx=Nx, Nθ=Nθ) + λ*alpha_ds*( rho_eθ_av(ρ, eθ; Nx =Nx, Nθ=Nθ ) .+ - midpoint_bond_av(m; Nx =Nx )  )
     Up::Array{Float64,3}  = -midpoint_bond_diff(  logmfp  + p_rho; Nx=Nx       ) 
-    Uθ::Array{Float64,3}  = -midpoint_Θ_diff(logmfa; Nx=Nx, Nθ = Nθ)
+    Uθ::Array{Float64,3}  = -midpoint_Θ_diff(fa; Nx=Nx, Nθ = Nθ)
 
     return Ua, Up, Uθ
 end

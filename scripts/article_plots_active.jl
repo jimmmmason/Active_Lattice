@@ -39,6 +39,12 @@ fig, ax = fig, ax = PyPlot.subplots(figsize =(10, 10))
         end
         if k ==40
             ax.plot(X,Y, label = latexstring("\$ n= $(k) \$")) #,color = "black"
+        elseif k==2
+            ax.plot(X,Y,linestyle="dashed",label = latexstring("\$ n = $(k) \$"))
+        elseif k==4
+            ax.plot(X,Y,linestyle="dashdot",label = latexstring("\$ n = $(k) \$"))
+        elseif k==6
+            ax.plot(X,Y,linestyle="dotted",label = latexstring("\$ n = $(k) \$"))
         else
             ax.plot(X,Y,linestyle="dashed",label = latexstring("\$ n = $(k) \$"))
         end
@@ -156,9 +162,9 @@ end
 params = []
         pert = "n=1"
         T  = 4.0
-        δ  = 1e-8
+        δ  = 1e-4
         name = "article_stability_L2norm_1d_δ=$(δ)"
-for ρ in [0.96], χ in [1.0], Pe in [8., 10., 12.], Dθ in [4.]
+for ρ in [0.99], χ in [1.0], Pe in [8., 10., 12. ], Dθ in [4.]
     local param
     #
     param = pde_param_fraction(; name = name, 
@@ -256,7 +262,7 @@ for i in 1:3
     label = latexstring("\$ \\mathrm{Pe} = $(Pe) \$")
     ax.plot(t_saves,dist_saves, label = label)
 end
-ax.axis([0., 4.0 ,0., .0000004 ],fontsize=15) 
+ax.axis([0., 4.0 ,0., .0004 ],fontsize=15) 
     param = params[1]
     @unpack ρ, Dθ = param
     ax.xaxis.set_tick_params(labelsize=15)
@@ -284,13 +290,13 @@ name = "figure_3_PDE_stab_timeseries_ρ=$(ρ)_"
 #
 params = []
         pert = "n=1"
-        T  = 1.0
+        T  = 4.0
         δ  = 1e-4
         name = "article_stability_L2norm_1d_δ=$(δ)"
         Nx = 128
         Nθ = 64
         χ = 1.
-for ρ in [0.7], χ in [1.0], Pe in [6.], Dθ in [4.]
+for ρ in [0.95], χ in [1.0], Pe in [8.], Dθ in [4.]
     local param
     #
     param = pde_param_fraction(; name = name, 
@@ -335,8 +341,8 @@ fig, ax = PyPlot.subplots(figsize =(10, 10))
     ax.set_xlabel(L"\phi",fontsize=20)
     ax.set_ylabel(L"\mathrm{Pe}", fontsize=20)
     ax.legend(loc = "upper right", fontsize=20)
-    ax.set_title("ℓ = $(1/sqrt(Dθ)), χ = $(χ)")
-    #title = latexstring("\\ell = $(round(1/sqrt(Dθ); digits = 2)) \$")
+    #ax.set_title("ℓ = $(1/sqrt(Dθ)), χ = $(χ)")
+    #title = latexstring("\$ \\ell = $(round(1/sqrt(Dθ); digits = 2)) \$")
     #fig.suptitle(title,fontsize=20)
 display(fig)
 name = "fig_4_stab+pde"
@@ -724,7 +730,7 @@ params = []
         T  = 4.0
         χ = 1.0 #128
         Δt = 0.001
-for ρ in [0.5], L in [32,64,128], Pe in [20.,30.], Dθ in [4.]
+for ρ in [0.5], L in [32,64,128], Pe in [30.], Dθ in [4.]
     name = "article_sim_data_fig_7"
     local param
             #
@@ -747,7 +753,7 @@ params_pde = []
         δ  = 1e-2
         Nx = 128
         Nθ = 64
-for ρ in [0.5], Pe in [20., 30.], Dθ in [4.]
+for ρ in [0.5], Pe in [30.], Dθ in [4.]
         local param
                 #
                 name = "article_rand_actually_2d_δ=$(δ)" #need to run pde in 2d 
@@ -842,11 +848,11 @@ display(fig)
 #
 rc("text", usetex=true)
 fig, ax = plt.subplots(1, 1, figsize=(15,10))
-i =2
+i =1
     param_pde = params_pde[i]
     #ax = axs[i]
         add_label = true
-    for j in (i):2:(6)#(3*i-2):1:(3*i)
+    for j in (i):1:(3)#(3*i-2):1:(3*i)
         param = params[j]
         @unpack ρ, Pe, Dθ, L = param
         name = latexstring(
@@ -863,9 +869,9 @@ i =2
     end
     #
     name = latexstring(
-        "\$ \\overline{\\rho}_\\varepsilon \$"
+        "\$ \\overline{\\rho}^\\varepsilon \$"
     )
-    pde_density_hist_av_load(fig, ax, param_pde; bins = 200, smoothing = false, label_name=name, add_label = add_label ) # bins = 17^2
+    pde_density_hist_av_load(fig, ax, param_pde; bins = 200, smoothing = false, label_name=name, add_label = add_label , linewidth = 2) # bins = 17^2
     #
     ax.axis(fontsize=15)
     ax.xaxis.set_tick_params(labelsize=15)
@@ -890,6 +896,7 @@ i =2
     "\$ \\ell  =  $(1/sqrt(Dθ)),  \\phi =  $(ρ),\\mathrm{Pe} = $(Pe) \$"
     )
     ax.set_title(title,fontsize=20)
+ax.legend(loc = "upper right", fontsize=20)
 display(fig)
 name = "figure_7_histograms"
     pathname = "/store/DAMTP/jm2386/Active_Lattice/plots/active_paper/$(name)";
@@ -1021,3 +1028,33 @@ display(fig)
 
 
 =#
+
+
+### test
+### fig 4
+#stability with pde
+#
+params = []
+        pert = "n=1"
+        T  = 4.0
+        δ  = 1e-8
+        name = "article_stability_L2norm_1d_δ=$(δ)"
+        Nx = 256
+        Nθ = 128
+        χ = 1.
+for ρ in [0.95], χ in [1.0], Pe in [8.], Dθ in [4.]
+    local param
+    #
+    param = pde_param_fraction(; name = name, 
+                    ρ = ρ, Pe = Pe, χ = χ, T = T, 
+                    Dθ = Dθ, δt = 1e-5, Nx = Nx, Nθ = Nθ, 
+                    save_interval = 0.01, max_steps = 1e7,
+                    pert = pert, k =40, δ = δ,
+            )
+    #
+    push!(params,param)
+end
+param = params[1]
+
+perturb_pde_run_1d(param)
+make_phase_video_1d_plus(param; frames = 240)
