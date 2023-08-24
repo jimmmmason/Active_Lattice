@@ -89,6 +89,11 @@ function a_lin_stab_line_fraction(ρ,χ; Dx =1. ,Pe = 20., Dθ =100.,k=40 )
     amin = a_MathieuEigen_lite(matrix; k = k)
     return real(amin)
 end
+using Roots
+function crit_Pe(ρ,χ; Dx =1. ,Pe_max = 40, Dθ =100.,k=40)
+    f(x) = a_lin_stab_line_fraction(ρ,χ; Dx =Dx ,Pe = x, Dθ =Dθ, k=k)
+    return find_zero(f,(0,Pe_max))
+end
 function lin_imaginary_fraction(ρ,χ; Dx =1. ,Pe = 20., Dθ =100.,k=40 )
     ρa = χ*ρ
     ρp = (1-χ)*ρ

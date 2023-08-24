@@ -199,7 +199,7 @@ function U_velocities_1d(fa::Array{Float64,2}, fp::Array{Float64,1}, ρ::Array{F
 
     Ua::Array{Float64,2}  = -midpoint_bond_diff_θ_1d(logmfa .+ p_rho; Nx=Nx, Nθ=Nθ).+ λ*midpoint_bond_av_1d(coeff_mag_s_1d(fa,ρ; Nθ=Nθ, Nx=Nx,γ=γ ); Nx =Nx ) .+ λ*eθ 
     Up::Array{Float64,1}  = -midpoint_bond_diff_1d(  logmfp  + p_rho; Nx=Nx       ) + λ*midpoint_bond_av_1d(coeff_mag_s_1d(fa,ρ; Nθ=Nθ, Nx=Nx,γ=γ ); Nx =Nx )
-    Uθ::Array{Float64,2}  = -midpoint_Θ_diff_1d(fa; Nx=Nx, Nθ = Nθ)
+    Uθ::Array{Float64,2}  = -midpoint_Θ_diff_1d(logmfa; Nx=Nx, Nθ = Nθ)
 
     return Ua, Up, Uθ
 end

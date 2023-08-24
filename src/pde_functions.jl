@@ -244,7 +244,7 @@ function U_velocities(fa::Array{Float64,3}, fp::Array{Float64,2}, ρ::Array{Floa
 
     Ua::Array{Float64,4}  = -midpoint_bond_diff_θ(logmfa .+ p_rho; Nx=Nx, Nθ=Nθ).+ λ*midpoint_bond_av(coeff_mag_s(fa,ρ; Nθ=Nθ, Nx=Nx ); Nx =Nx ) .+ λ*eθ 
     Up::Array{Float64,3}  = -midpoint_bond_diff(  logmfp  + p_rho; Nx=Nx       ) + λ*midpoint_bond_av(coeff_mag_s(fa,ρ; Nθ=Nθ, Nx=Nx ); Nx =Nx )
-    Uθ::Array{Float64,3}  = -midpoint_Θ_diff(fa; Nx=Nx, Nθ = Nθ)
+    Uθ::Array{Float64,3}  = -midpoint_Θ_diff(logmfa; Nx=Nx, Nθ = Nθ)
 
     return Ua, Up, Uθ
 end
