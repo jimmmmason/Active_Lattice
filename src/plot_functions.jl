@@ -1,7 +1,7 @@
 cd("/home/jm2386/Active_Lattice/")
 using DrWatson
 @quickactivate "Active_Lattice"
-println("Loading ...")
+#println("Loading ...")
 
 
 #visualise data
@@ -45,7 +45,7 @@ function plot_pde_mag(fig::Figure, ax::PyObject, param::Dict{String,Any}, densit
     #collect data
     eθ = [cos.(S*2π/Nθ) sin.(S*2π/Nθ)]
     @tensor begin
-        m[a,b,d] := 2π *fa[a,b,θ]*eθ[θ,d]/Nθ
+        m[a,b,d] := (2π/Nθ)*fa[a,b,θ]*eθ[θ,d]
     end
     ρ = fp + sum(fa; dims =3)[:,:,1].*(2*π/Nθ)
     absmag  = sqrt.(m[:,:,1].^2+m[:,:,2].^2)
@@ -86,7 +86,7 @@ function plot_pde_mass(fig::Figure, ax::PyObject, param::Dict{String,Any}, densi
     #collect data
     eθ = [cos.(S*2π/Nθ) sin.(S*2π/Nθ)]
     @tensor begin
-        m[a,b,d] := 2π *fa[a,b,θ]*eθ[θ,d]/Nθ
+        m[a,b,d] := (2π/Nθ)*fa[a,b,θ]*eθ[θ,d]
     end
     ρ = fp + sum(fa; dims =3)[:,:,1].*(2*π/Nθ)
     #absmag  = sqrt.(m[:,:,1].^2+m[:,:,2].^2)
@@ -236,7 +236,7 @@ function plot_pde_mag_1d(fig::Figure, ax::PyObject, param::Dict{String,Any}, den
     #collect data
     eθ = [cos.(S*2π/Nθ) sin.(S*2π/Nθ)]
     @tensor begin
-        m[a,d] := 2π *fa[a,θ]*eθ[θ,d]/Nθ
+        m[a,d] := (2π/Nθ) *fa[a,θ]*eθ[θ,d]
     end
     #ρ = fp + sum(fa; dims =2)[:,1].*(2*π/Nθ)
     t = round(t; digits=5)
@@ -722,14 +722,13 @@ function spatial_fourier_mode2(ρ; Nx = 50)
 end
 
 function mag_1d(fa; Nθ = 20)
-    eθ = cos.(1:Nθ*2π/Nθ)
+    eθ = cos.((1:Nθ)*2π/Nθ)
     @tensor begin
-        m[a] := 2π *fa[a,θ]*eθ[θ]/Nθ
+        m[a] := (2*π/Nθ)*fa[a,θ]*eθ[θ]
     end
     return m
 end
 ##
-
 
 function plot_sim_mag(fig::Figure, ax::PyObject, param::Dict{String,Any}, t; scale = "local", cbar = true)
     @unpack name, L, λ, γ, ρa, ρp, Δt, Dθ= param
@@ -790,5 +789,177 @@ function plot_sim_mass(fig::Figure, ax::PyObject, param::Dict{String,Any},t; sca
     end
     #fig
     return fig
-end 
-println("booted")
+end
+#println("booted")
+
+
+function animate_phase_pdes_pm(param,t_saves,fa_saves,fp_saves; frames = 99, ϕg = 0.0, ϕl = 1.0)
+    @unpack name, λ, ρa, ρp, Nx, Nθ, δt, Dθ, χ, γ = param
+    fig, axs = plt.subplots(2, 1, figsize=(10,10))
+    N = length(t_saves)
+    function makeframe(i)
+        clf()
+        ax1 = fig.add_subplot(211)
+        ax2 = fig.add_subplot(212)
+        axs = ax1, ax2
+        vid_pde_plot_pm(fig, axs, param, t_saves, fa_saves, fp_saves, i+1)
+        binod_liquid = ax1.plot((1:Nx)/Nx, ϕl*ones(Nx), color = "black", linestyle = "--", label = "_liquid phase")
+        binod_gas = ax1.plot((1:Nx)/Nx, ϕg*ones(Nx), color = "black",linestyle = "--", label = "_gas phase")
+        return fig
+    end
+    interval = 5*Int64(round(20000/frames))
+    myanim = anim.FuncAnimation(fig, makeframe, frames=frames, interval=interval)
+    # Convert it to an MP4 movie file and saved on disk in this format.
+    T = t_saves[Int64(round((frames+1)))]
+    pathname = "/store/DAMTP/jm2386/Active_Lattice/plots/vids/pde_phase_vids/$(name)/active=$(ρa)_passive=$(ρp)_lamb=$(λ)";
+    mkpath(pathname)
+    filename = "/store/DAMTP/jm2386/Active_Lattice/plots/vids/pde_phase_vids/$(name)/active=$(ρa)_passive=$(ρp)_lamb=$(λ)/time=$(round(T; digits = 5))_Nx=$(Nx)_Nθ=$(Nθ)_active=$(ρa)_passive=$(ρp)_lamb=$(λ).mp4";
+    myanim[:save](filename, bitrate=-1, dpi= 100, extra_args=["-vcodec", "libx264", "-pix_fmt", "yuv420p"])
+end
+
+function make_phase_video_pm(param; skip_factor = 10, ϕg = 0.0, ϕl = 1.0,start_time = 0.)
+    @unpack T, save_interval = param
+    save_interval = save_interval*skip_factor
+    t_saves, fa_saves, fp_saves = load_pdes_pm(param,T; save_interval = save_interval, start_time = start_time)
+    frames = Int64(length(t_saves))
+    animate_phase_pdes_pm(param,t_saves,fa_saves,fp_saves; frames = frames-1,ϕg =ϕg, ϕl = ϕl)
+end
+
+function vid_pde_plot_pm(fig::Figure, axs, param::Dict{String,Any}, t_saves, fa_saves, fp_saves, i)
+    @unpack Nx, Nθ, ρa, ρp, χ, Dθ, Dx, k, γ,Pe = param
+    ρa_saves, ρp_saves = deepcopy(spatial_density_pm.(fa_saves)), deepcopy(fp_saves)
+
+    push!(ρa_saves[i], ρa_saves[i][1])
+    push!(ρp_saves[i], ρp_saves[i][1])
+
+    ρsum = ρp_saves[i]+ρa_saves[i]
+
+    axs[1].plot((0:1:Nx)/Nx,ρa_saves[i], color = "red", label = L"\rho^a")
+    axs[1].plot((0:1:Nx)/Nx,ρsum, color = "black", label = L"\rho")
+    axs[1].plot((0:1:Nx)/Nx,ρp_saves[i], color = "blue", label = L"\rho^p")
+
+    axs[1].xaxis.set_ticks(0.:0.2:1.0)
+    axs[1].xaxis.set_tick_params(labelsize=15)
+    axs[1].yaxis.set_tick_params(labelsize=15)
+    rhomax = maximum(maximum(ρa_saves))+maximum(maximum(ρp_saves))
+    axs[1].axis([0., 1., 0. , rhomax])
+    #axs[1].axis([0., 1., min(minimum(minimum(ρa_saves)),minimum(minimum(ρp_saves))),maximum(maximum( ρa_saves+ρp_saves ))])
+    axs[1].set_xlabel(L"x",fontsize=20)
+    #axs[1].set_ylabel(L"\rho,",fontsize=20)
+    title = latexstring("\$ \\ell = $(round(1/sqrt(Dθ); digits = 2)), \\chi = $(χ), \\phi = $(ρa+ρp), \\mathrm{Pe} = $(round(Pe; digits = 3)), t = $(round(t_saves[i]; digits = 3))\$")
+    axs[1].set_title(title,fontsize=20)
+
+    mat1 = zeros(1, Nx+1)
+    mat2= zeros(1, Nx+1)
+    mags = mag_pm(fa_saves[i]; Nθ = Nθ)
+    push!(mags,mags[1])
+    mat1[1, :] = mags
+    mat2[1, :] = mags.*(-ρsum.+1)
+
+    #colmap = PyPlot.plt.cm.seismic
+    colmap = PyPlot.plt.cm.PRGn
+    norm1 = matplotlib.colors.Normalize(vmin= -rhomax*0.5 , vmax= rhomax*0.5) 
+    #norm1 = matplotlib.colors.Normalize(vmin= -maximum(abs.(mags)) , vmax= maximum(abs.(mags)) )
+    #norm2 = matplotlib.colors.Normalize(vmin= minimum(mags/10) , vmax= maximum(mags)/10 )
+
+    axs[2].matshow(mat1; norm = norm1,  cmap = colmap, extent = [0., 1., 0., 0.1])
+    #axs[3].matshow(mat2; norm = norm2,  cmap = colmap, extent = [0., 1., 0., 0.1])
+
+    axs[2].set_aspect(1.)
+    #axs[3].set_aspect(1.)
+
+    axs[2].xaxis.set_ticks(0.:0.2:1.0)
+    axs[2].yaxis.set_ticks([])
+    axs[2].xaxis.set_tick_params(labelsize=15)
+    axs[2].xaxis.tick_bottom()
+    #ax.set_title(L"\Re{ \lambda_n^\mathrm{max}} = 0",fontsize=20)
+    #ax.set_xlabel(L"x",fontsize=20)
+
+    axs[2].set_ylabel(L"\mathbf{p}", fontsize=20, rotation=0)
+    axs[2].yaxis.set_label_coords(-.05, .5)
+
+    lines, labels = axs[1].get_legend_handles_labels()
+    fig.tight_layout()
+    ldg = fig.legend(lines, labels, loc = "center right", fontsize=20, bbox_to_anchor = (0.25, 0.25, 1, 1),
+    bbox_transform = plt.gcf().transFigure)
+
+    return fig
+end
+
+function vid_pde_plot_pm_plus(fig::Figure, axs, param::Dict{String,Any}, t_saves, fa_saves, fp_saves, i)
+    @unpack Nx, Nθ, ρa, ρp, χ, Dθ, Dx, k, γ,Pe = param
+    ρa_saves, ρp_saves = deepcopy(spatial_density_pm.(fa_saves)), deepcopy(fp_saves)
+
+    ja_saves, jp_saves = deepcopy(spatial_currents_pm(fa_saves, fp_saves; param = param))
+
+    push!(ja_saves[i], ja_saves[i][1])
+    push!(jp_saves[i], jp_saves[i][1])
+
+    push!(ρa_saves[i], ρa_saves[i][1])
+    push!(ρp_saves[i], ρp_saves[i][1])
+
+    ρsum = ρp_saves[i]+ρa_saves[i]
+
+    axs[1].plot((0:1:Nx)/Nx,ρa_saves[i], color = "red", label = L"\rho^a")
+    axs[1].plot((0:1:Nx)/Nx,ρsum, color = "black", label = L"\rho")
+    axs[1].plot((0:1:Nx)/Nx,ρp_saves[i], color = "blue", label = L"\rho^p")
+
+    axs[1].xaxis.set_ticks(0.:0.2:1.0)
+    axs[1].xaxis.set_tick_params(labelsize=15)
+    axs[1].yaxis.set_tick_params(labelsize=15)
+    rhomax = maximum(maximum(ρa_saves))+maximum(maximum(ρp_saves))
+    axs[1].axis([0., 1., 0. , rhomax])
+    #axs[1].axis([0., 1., min(minimum(minimum(ρa_saves)),minimum(minimum(ρp_saves))),maximum(maximum( ρa_saves+ρp_saves ))])
+    axs[1].set_xlabel(L"x",fontsize=20)
+    #axs[1].set_ylabel(L"\rho,",fontsize=20)
+    title = latexstring("\$ \\ell = $(round(1/sqrt(Dθ); digits = 2)), \\chi = $(χ), \\phi = $(ρa+ρp), \\mathrm{Pe} = $(round(Pe; digits = 3)), t = $(round(t_saves[i]; digits = 3))\$")
+    axs[1].set_title(title,fontsize=20)
+
+    mat1 = zeros(1, Nx+1)
+    mat2= zeros(1, Nx+1)
+    mags = mag_pm(fa_saves[i]; Nθ = Nθ)
+    push!(mags,mags[1])
+    mat1[1, :] = mags
+    mat2[1, :] = mags.*(-ρsum.+1)
+
+    #colmap = PyPlot.plt.cm.seismic
+    colmap = PyPlot.plt.cm.PRGn
+    norm1 = matplotlib.colors.Normalize(vmin= -rhomax*0.5 , vmax= rhomax*0.5) 
+    #norm1 = matplotlib.colors.Normalize(vmin= -maximum(abs.(mags)) , vmax= maximum(abs.(mags)) )
+    #norm2 = matplotlib.colors.Normalize(vmin= minimum(mags/10) , vmax= maximum(mags)/10 )
+
+    axs[2].matshow(mat1; norm = norm1,  cmap = colmap, extent = [0., 1., 0., 0.1])
+    #axs[3].matshow(mat2; norm = norm2,  cmap = colmap, extent = [0., 1., 0., 0.1])
+
+    axs[2].set_aspect(1.)
+    #axs[3].set_aspect(1.)
+
+    axs[2].xaxis.set_ticks(0.:0.2:1.0)
+    axs[2].yaxis.set_ticks([])
+    axs[2].xaxis.set_tick_params(labelsize=15)
+    axs[2].xaxis.tick_bottom()
+    #ax.set_title(L"\Re{ \lambda_n^\mathrm{max}} = 0",fontsize=20)
+    #ax.set_xlabel(L"x",fontsize=20)
+
+    axs[2].set_ylabel(L"\mathbf{p}", fontsize=20, rotation=0)
+    axs[2].yaxis.set_label_coords(-.05, .5)
+
+
+    axs[3].plot((0:1:Nx)/Nx, ja_saves[i], color = "red", label = L"j^a")
+    axs[3].plot((0:1:Nx)/Nx, jp_saves[i], color = "blue", label = L"j^p")
+
+    jmax = maximum(maximum(ja_saves))+maximum(maximum(jp_saves))
+    axs[3].xaxis.set_ticks(0.:0.2:1.0)
+    axs[3].xaxis.set_tick_params(labelsize=15)
+    axs[3].yaxis.set_tick_params(labelsize=15)
+    axs[3].axis([0., 1., -jmax , jmax])
+    axs[3].set_xlabel(L"x",fontsize=20)
+
+
+    lines, labels = axs[1].get_legend_handles_labels()
+    fig.tight_layout()
+    ldg = fig.legend(lines, labels, loc = "center right", fontsize=20, bbox_to_anchor = (0.25, 0.25, 1, 1),
+    bbox_transform = plt.gcf().transFigure)
+
+    return fig
+end

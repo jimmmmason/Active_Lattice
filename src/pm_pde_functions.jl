@@ -1,25 +1,28 @@
 cd("/home/jm2386/Active_Lattice/")
 using DrWatson
 @quickactivate "Active_Lattice"
-println("Loading ...")
+#println("Loading ...")
 #runnning simulation
 using StatsBase, DataStructures, UnPack, LinearAlgebra, Random, TensorOperations, StaticArrays
 
 
-function pde_param_pm(; name = "test", D =1. , Pe =1. ,ρa = 0.5, ρp = 0.0, Nx = 100, Nθ = 2, δt = 1e-5, Dθ = 10, T= 0.001, save_interval = 0.01, max_steps = 1e8, max_runs = 6, λ_step = 10., λmax = 100., λs = 20.:20.:100., pert = "n=1", δ = 0.01)
+function pde_param_pm(; name = "test", D =1., Dx = 1., Pe =1., Dθ = 10, ρ= 0.5, χ = 1.0, Nx = 100, Nθ = 20, δt = 1e-5, T= 0.001, save_interval = 0.01, max_steps = 1e8, max_runs = 6, λ_step = 10., λmax = 100., λs = 20.:20.:100., pert = "n=1", δ = 0.01, k=20,γ = 0.0, video_length = 10000., cbar_max = 1.0, cbar_min = 0.0, frames = 1000, pert_interval = 5.)
+    Ω  = [[i,j] for i in 1:Nx for j in 1:Nx ] 
     S  = [ θ for θ in 1:Nθ]
     E = [[1,0],[0,1],[0,-1],[-1,0],]
+    ρp = 0.0
     λ = Pe*sqrt(Dθ)
-    Dx = D
+    ρp = (1-χ)*ρ
+    ρa = χ*ρ
     param = Dict{String,Any}()
-    @pack! param = name, D, λ, ρa, ρp, δt, Nx, Nθ, S,  E, Dθ, T, save_interval, max_steps, max_runs, λ_step, λmax, λs, pert, δ, Pe, Dx
+    @pack! param = k, name, D, λ, ρa, ρp, δt, Nx, Nθ, S,  E, Dθ, T, save_interval, max_steps, max_runs, λ_step, λmax, λs, pert, δ, Pe, Dx, χ, ρ, γ, video_length, cbar_max, cbar_min, frames, pert_interval
     return param
 end
 
 function initialize_density_pm(param::Dict{String,Any})
     @unpack name, D, λ, ρa, ρp, δt, Nx, Nθ, S,  E= param
     density = Dict{String,Any}()
-    fa = fill(ρa/(2π),(Nx,Nθ))
+    fa = fill(ρa/(2),(Nx,Nθ))
     fp = fill(ρp,(Nx))
     t = 0.
     @pack! density = fa , fp, t
@@ -104,7 +107,7 @@ function θ_diff_pm(f::Array{Float64,2}; Nx::Int64 = 100,  Nθ::Int64 = 2)
 
     for θ in 1:Nθ
         ϕ ::Int64 = ((θ % Nθ) +1)
-        div_f[:,ϕ] += (f[:,ϕ]-f[:,θ])
+        div_f[:,θ] -= (f[:,ϕ]-f[:,θ])
     end
 
     return div_f
@@ -128,13 +131,8 @@ function self_diff_prime(ρ::Float64)
     return - ( α*(2*α-1)/(2*α+1)*ρ.^2 - α*ρ .+1) + ( -ρ .+1)*(2*α*(2*α-1)/(2*α+1)*ρ - α );
 end
 
-function mag_pm(f::Array{Float64,2}; Nθ = 50, Nx =100)
-    eθ::Array{Float64,1} = cos.((1:Nθ)*2π/Nθ);
-    m = Array{Float64,1}(undef, Nx);
-    @tensor begin
-        m[a] := f[a,θ]*eθ[θ]
-    end
-    return 2*π*m/Nθ
+function mag_pm(f::Array{Float64,2}; Nθ = 2, Nx =100)
+    return f[:,2] - f[:,1]
 end
 
 function coeff_mag_s_pm(f::Array{Float64,2},ρ::Array{Float64,1}; Nθ::Int64 = 2,  Nx::Int64 = 100,γ::Float64 = 0.0)
@@ -144,6 +142,11 @@ function coeff_mag_s_pm(f::Array{Float64,2},ρ::Array{Float64,1}; Nθ::Int64 = 2
     mag_s::Array{Float64,1} = s.*m
     return mag_s
 end
+
+function coeff_s(rho::Float64,ds::Float64)
+    return ((rho*ds)>0 ? (1-rho-ds)/(rho*ds) : 0)
+end
+
 #functon p is labelled W in the pdf
 
 function p(x::Float64;logtol = 1e-10, γ =0.)
@@ -191,7 +194,7 @@ end
 function U_velocities_pm(fa::Array{Float64,2}, fp::Array{Float64,1}, ρ::Array{Float64,1}; Nx::Int64 =100, Nθ::Int64 =100, λ::Float64 = 10., γ::Float64=0.)
     logtol::Float64 = log(1e-10);
 
-    eθ:: Array{Float64,2} = reshape(cos.((1:Nθ)*2π/Nθ),1,Nθ)
+    eθ:: Array{Float64,2} = reshape([-1 1],1,Nθ) 
 
     logmfa::Array{Float64,2} = map(x -> (x>0 ? log(x) : logtol), fa);
     logmfp::Array{Float64,1} = map(x -> (x>0 ? log(x) : logtol), fp);
@@ -227,7 +230,7 @@ end
 ##
 
 function time_stepper_pm(fa::Array{Float64,2}, fp::Array{Float64,1}, δt::Float64; Nx::Int64 =100, Nθ::Int64 =100, λ::Float64 = 10., Dθ::Float64 = 10.,γ::Float64=0.)
-    ρ::Array{Float64,1} = fp + sum(fa; dims =2)[:,1].*(2*π/Nθ)
+    ρ::Array{Float64,1} = fp + sum(fa; dims =2)[:,1]
     
     Ua::Array{Float64,2},   Up::Array{Float64,1}   = U_velocities_pm(fa,fp,ρ; Nx=Nx, Nθ=Nθ, λ=λ,γ=γ)
     moba::Array{Float64,2}, mobp::Array{Float64,1} = mob_pm(fa,fp,ρ;γ=γ)
@@ -236,7 +239,7 @@ function time_stepper_pm(fa::Array{Float64,2}, fp::Array{Float64,1}, δt::Float6
     a::Float64 = maximum(abs.(Ua));
     b::Float64 = maximum(abs.(Up));
     
-    tempu::Float64 = 1/(6*max(a*Nx, b*Nx, c*Nθ*Dθ/(2*π)));
+    tempu::Float64 = 1/(6*max(a*Nx, b*Nx));
     dt::Float64= min(δt, tempu)
 
     fa -= dt*( site_div_θ_pm(Fa; Nx=Nx, Nθ=Nθ) + Dθ*θ_diff_pm(fa; Nx=Nx, Nθ=Nθ))
@@ -305,7 +308,7 @@ function perturb_pde_pm!(param::Dict{String,Any}, density::Dict{String,Any}; δ 
     @unpack Nx, S, ρa, ρp, λ, Dθ, Nx, Nθ,Dx,Pe,Dθ,k, γ = param
     @unpack fa, fp = density
     ρ = ρa + ρp
-    if ρ >0.9
+    if ρ >0.99
         δ = min(δ, (1 - ρ)/(2*π+0.01));
     end
     #from stability: 
@@ -325,6 +328,12 @@ function perturb_pde_pm!(param::Dict{String,Any}, density::Dict{String,Any}; δ 
             Pa = (x,θ) -> real.( dot(A[:,k],cos.(θ*K*(2*π/Nθ)))*exp(-im*x*ω/Nx) )
             Pp = (x) -> 0.;
         end
+    end
+    if pert == "pm_lin"
+        ω, value, vector = pm_lin_pert(param)
+        Prho = (x) -> real.( vector[1]*exp(im*x*2*π/Nx) );
+        Pact = (x) -> real.( vector[2]*exp(im*x*2*π/Nx) );
+        Pmag = (x) -> real.( vector[3]*exp(im*x*2*π/Nx) );
     end
     if pert == "rand"
         Pa = (x,θ) -> δ*ρa*(( rand() - 0.5 )/(ρa+0.01))/(2*π);
@@ -346,6 +355,12 @@ function perturb_pde_pm!(param::Dict{String,Any}, density::Dict{String,Any}; δ 
         for x₁ in 1:Nx
             ρ = fp[x₁] + sum(fa[x₁,:])*2*π/Nθ
             pertp[x₁] += min(10*δ, ρ*(1-ρ)/2)*Pp(x₁)/2;
+        end
+    elseif pert == "pm_lin"
+        for x₁ in 1:Nx
+            perta[x₁, 1] += (Pact(x₁)-Pmag(x₁))/2
+            perta[x₁, 2] += (Pact(x₁)+Pmag(x₁))/2
+            pertp[x₁]    += Prho(x₁)-Pact(x₁)
         end
     else
         for x₁ in 1:Nx, θ in S
@@ -369,6 +384,24 @@ function perturb_pde_pm!(param::Dict{String,Any}, density::Dict{String,Any}; δ 
     end
 
     @pack! density = fa, fp;
+end
+
+function pm_lin_pert(param)
+    @unpack S, ρa, ρp, λ, Nx, Nθ, Dx, Pe, Dθ, γ = param
+    ω = 2*π/sqrt(Dθ);
+    ϕa = ρa;
+    ϕp = ρp;
+    ϕ  = ϕa + ϕp;
+    ϕ0 = 1- ϕ;
+    ds = self_diff(ϕ);
+    dsp = self_diff_prime(ϕ);
+    DD = (1-ds)/ϕ
+    s = DD - 1
+    W = [-ω^2             0          -im*ω*Pe*ϕ0; 
+        -ω^2*ϕa*DD      -ω^2*ds     -im*ω*Pe*(ϕa*s+ds); 
+        -im*ω*Pe*ϕa*dsp -im*ω*Pe*ds -ω^2*ds-2         ]
+    values,vectors = eigen(W)
+    return ω, values[3], vectors[:,3]
 end
 
 function nudge_pde_pm!(param::Dict{String,Any}, density::Dict{String,Any}; δ = 0.01)
@@ -424,6 +457,12 @@ function perturb_pde_run_pm(param)
     @unpack T, save_interval, max_steps, pert, δ = param
     density = initialize_density_pm(param)
     perturb_pde_pm!(param,density; pert = pert, δ = δ);
+    run_pde_until_pm!(param,density,T; save_on = true, max_steps = max_steps, save_interval = save_interval)
+end
+
+function binodal_pde_run_pm(param)
+    @unpack T, save_interval, max_steps = param
+    density = initialize_sol_pm_full(param)
     run_pde_until_pm!(param,density,T; save_on = true, max_steps = max_steps, save_interval = save_interval)
 end
 
@@ -503,7 +542,7 @@ function dist_from_unif_pm(param, fa, fp)
     mixD_fa = midpoint_Θ_diff_pm(grad_fa; Nx = Nx,  Nθ = Nθ)
     partial_partialθ_fa = midpoint_Θ_diff_pm(partialθ_fa; Nx = Nx,  Nθ = Nθ)
     =#
-    L2 = 2*π*sum( (fa .- ρa/(2*π) ).^2)/(Nx*Nθ) + sum( (fp .- ρp).^2)/(Nx)
+    L2 = 2*π*sum( (fa .- ρa/2 ).^2)/(Nx*Nθ) + sum( (fp .- ρp).^2)/(Nx)
     #=
     H1x = 2*π*sum( (grad_fa ).^2)/(Nx*Nθ) + sum( (grad_fp).^2)/(Nx)
 
@@ -548,10 +587,10 @@ function time_dist_from_unif_pm(param, fa_saves, fp_saves)
     return dist_saves
 end
 
-# loading
-using Pkg
-Pkg.add("JLD2")
-using JLD2
+# # loading
+# using Pkg
+# Pkg.add("JLD2")
+# using JLD2
 
 
 function load_pdes_pm(param::Dict{String,Any},T; save_interval = 1., start_time = 0.)
@@ -897,4 +936,396 @@ function pde_step_sym!(param::Dict{String,Any}, density::Dict{String,Any})
     return dt
 end
 
-println("booted")
+# plots 
+using TensorOperations, PyPlot, PyCall
+
+function make_phase_video_pm(param; frames = 100)
+    @unpack T, save_interval = param
+    save_interval = T/frames
+    t_saves, fa_saves, fp_saves = load_pdes_pm(param,T; save_interval = save_interval)
+    frames = Int64(round(length(t_saves)))-1
+    animate_phase_pdes_1d(param,t_saves,fa_saves,fp_saves; frames = frames-1)
+end
+
+
+function vid_pde_plot_pm(fig::Figure, axs, param::Dict{String,Any}, t_saves, fa_saves, fp_saves, i)
+    @unpack Nx, Nθ, ρa, ρp, χ, Dθ, Dx, k, γ,Pe = param
+    ρa_saves, ρp_saves = deepcopy(spatial_density_pm.(fa_saves)), deepcopy(fp_saves)
+
+    push!(ρa_saves[i], ρa_saves[i][1])
+    push!(ρp_saves[i], ρp_saves[i][1])
+
+    ρsum = ρp_saves[i]+ρa_saves[i]
+
+    axs[1].plot((0:1:Nx)/Nx,ρa_saves[i].-ρa, color = "red", label = L"\rho^a - \phi^a")
+    axs[1].plot((0:1:Nx)/Nx,ρsum.-ρa.-ρp, color = "black", label = L"\rho - \phi")
+    axs[1].plot((0:1:Nx)/Nx,ρp_saves[i].-ρp, color = "blue", label = L"\rho^p - \phi^p")
+
+    axs[1].xaxis.set_ticks(0.:0.2:1.0)
+    axs[1].xaxis.set_tick_params(labelsize=15)
+    axs[1].yaxis.set_tick_params(labelsize=15)
+    rhomax = maximum(maximum(ρa_saves).-ρa)+maximum(maximum(ρp_saves).-ρp)
+    axs[1].axis([0., 1., -rhomax , rhomax])
+    #axs[1].axis([0., 1., min(minimum(minimum(ρa_saves)),minimum(minimum(ρp_saves))),maximum(maximum( ρa_saves+ρp_saves ))])
+    axs[1].set_xlabel(L"x",fontsize=20)
+    #axs[1].set_ylabel(L"\rho,",fontsize=20)
+    title = latexstring("\$ \\ell = $(round(1/sqrt(Dθ); digits = 2)), \\chi = $(χ), \\phi = $(ρa+ρp), \\mathrm{Pe} = $(round(Pe; digits = 3)), t = $(round(t_saves[i]; digits = 3))\$")
+    axs[1].set_title(title,fontsize=20)
+
+    mat1 = zeros(1, Nx+1)
+    mat2= zeros(1, Nx+1)
+    mags = mag_pm(fa_saves[i]; Nθ = Nθ)
+    push!(mags,mags[1])
+    mat1[1, :] = mags
+    mat2[1, :] = mags.*(-ρsum.+1)
+
+    #colmap = PyPlot.plt.cm.seismic
+    colmap = PyPlot.plt.cm.PRGn
+    norm1 = matplotlib.colors.Normalize(vmin= -rhomax*0.5 , vmax= rhomax*0.5) 
+    #norm1 = matplotlib.colors.Normalize(vmin= -maximum(abs.(mags)) , vmax= maximum(abs.(mags)) )
+    #norm2 = matplotlib.colors.Normalize(vmin= minimum(mags/10) , vmax= maximum(mags)/10 )
+
+    axs[2].matshow(mat1; norm = norm1,  cmap = colmap, extent = [0., 1., 0., 0.1])
+    #axs[3].matshow(mat2; norm = norm2,  cmap = colmap, extent = [0., 1., 0., 0.1])
+
+    axs[2].set_aspect(1.)
+    #axs[3].set_aspect(1.)
+
+    axs[2].xaxis.set_ticks(0.:0.2:1.0)
+    axs[2].yaxis.set_ticks([])
+    axs[2].xaxis.set_tick_params(labelsize=15)
+    axs[2].xaxis.tick_bottom()
+    #ax.set_title(L"\Re{ \lambda_n^\mathrm{max}} = 0",fontsize=20)
+    #ax.set_xlabel(L"x",fontsize=20)
+
+    axs[2].set_ylabel(L"\mathbf{p}", fontsize=20, rotation=0)
+    axs[2].yaxis.set_label_coords(-.05, .5)
+
+    lines, labels = axs[1].get_legend_handles_labels()
+    fig.tight_layout()
+    ldg = fig.legend(lines, labels, loc = "center right", fontsize=20, bbox_to_anchor = (0.25, 0.25, 1, 1),
+    bbox_transform = plt.gcf().transFigure)
+
+    return fig
+end
+
+function animate_phase_pdes_pm(param,t_saves,fa_saves,fp_saves; frames = 99)
+    @unpack name, λ, ρa, ρp, Nx, Nθ, δt, Dθ, χ, γ = param
+    fig, axs = plt.subplots(2, 1, figsize=(10,10))
+    function makeframe(i)
+        clf()
+        ax1 = fig.add_subplot(211)
+        ax2 = fig.add_subplot(212)
+        axs = ax1, ax2
+        vid_pde_plot_pm(fig, axs, param, t_saves, fa_saves, fp_saves, i+1)
+        return fig
+    end
+    interval = 5*Int64(round(20000/frames))
+    myanim = anim.FuncAnimation(fig, makeframe, frames=frames, interval=interval)
+    # Convert it to an MP4 movie file and saved on disk in this format.
+    T = t_saves[Int64(round((frames+1)))]
+    pathname = "/store/DAMTP/jm2386/Active_Lattice/plots/vids/pde_phase_vids/$(name)/active=$(ρa)_passive=$(ρp)_lamb=$(λ)";
+    mkpath(pathname)
+    filename = "/store/DAMTP/jm2386/Active_Lattice/plots/vids/pde_phase_vids/$(name)/active=$(ρa)_passive=$(ρp)_lamb=$(λ)/time=$(round(T; digits = 5))_Nx=$(Nx)_Nθ=$(Nθ)_active=$(ρa)_passive=$(ρp)_lamb=$(λ).mp4";
+    myanim[:save](filename, bitrate=-1, dpi= 100, extra_args=["-vcodec", "libx264", "-pix_fmt", "yuv420p"])
+end 
+
+function cal_rho_saves(fa, fp; Nθ = Nθ)
+    return fp + sum(fa; dims =2)[:,1]
+end
+
+function spatial_density_pm(fa)
+    return sum(fa; dims =2)[:,1]
+end
+
+function bump_funciton(x; ϵ = 1, x0 = 0.)
+    if (-1<((x-x0)/ϵ)<1)
+        return exp(-1/(1-((x-x0)/ϵ)^2))/ϵ
+    else
+        return 0
+    end
+end
+
+function initialize_bin_pm(param::Dict{String,Any}; )
+    @unpack name, D, λ, ρa, ρp, δt, Nx, Nθ, S,  E= param
+    ϕa = ρa
+    ϕp = ρp
+    initial_Δ = 1e-4;
+    max_iter = 40;
+    tol = 1e-3;
+    atol = 1e-12;
+    rho_max = (1-10e-20);
+    γ = (1-ϕa)/(1-ρ);
+
+    find_sol, lower_limits, upper_limits = colapse_sol_interval(;Pe = Pe, γ = γ, rho_max = rho_max, initial_Δ = initial_Δ, max_iter = max_iter, tol = tol, atol = atol);
+    ϕg = lower_limits[1]
+    ϕl = upper_limits[1]
+
+    ϕag, ϕpg = gamma_converter(γ, ϕg)
+    ϕal, ϕpl = gamma_converter(γ, ϕl)
+
+    density = Dict{String,Any}()
+    fa = fill(ϕag/(2),(Nx,Nθ))
+    fp = fill(ϕpg,(Nx))
+    Nx2 = Int64(round(Nx/2))
+    fa[1:Nx2,:] = fill(ϕal/(2),(Nx2,Nθ))
+    fp[1:Nx2] = fill(ϕpl,(Nx2))
+    t = 0.
+    @pack! density = fa , fp, t
+    return density
+end
+
+function smooth_density(param,density)
+    @unpack name, Dx, Dθ, λ, ρa, ρp, δt, Nx, Nθ, S,  E= param
+    @unpack t, fa, fp = density 
+    
+    mollifier = bump_funciton.((1:Nx)/Nx; ϵ = 5*sqrt(Dx/Dθ), x0 = 1/2)
+    mollifier = mollifier/sum(mollifier)
+
+    Nx2 = Int64(round(Nx/2))
+
+    fa2 = zeros(Nx,2)
+    fp2 = zeros(Nx)
+    for i in 1:Nx, j in 1:Nx
+        ## k = i - j 
+        k = (i-j +Nx2 +Nx -1 )%Nx +1
+        fa2[i,1] += mollifier[k].*fa[j,1]
+        fa2[i,2] += mollifier[k].*fa[j,2]
+        fp2[i]   += mollifier[k].*fp[j]
+    end
+
+    density = Dict{String,Any}()
+    fa = fa2
+    fp = fp2
+    t = 0.
+    @pack! density = fa , fp, t
+    return density
+end
+
+
+function initialize_arctan_pm(param::Dict{String,Any}; )
+    @unpack name, D, λ, ρa, ρp, δt, Nx, Nθ, S,  E= param
+    ϕa = ρa
+    ϕp = ρp
+    ϕ = ϕa+ϕp
+    initial_Δ = 1e-4;
+    max_iter = 40;
+    tol = 1e-3;
+    atol = 1e-12;
+    rho_max = (1-10e-20);
+    γ = (1-ϕa)/(1-ϕ);
+
+    find_sol, lower_limits, upper_limits = colapse_sol_interval(;Pe = Pe, γ = γ, rho_max = rho_max, initial_Δ = initial_Δ, max_iter = max_iter, tol = tol, atol = atol);
+    ϕg = lower_limits[1]
+    ϕl = upper_limits[1]
+
+    ϕag, ϕpg = gamma_converter(γ, ϕg)
+    ϕal, ϕpl = gamma_converter(γ, ϕl)
+
+
+    l = sqrt(Dx/Dθ)
+    ϵ = 2.0
+    
+    density = Dict{String,Any}()
+
+    ρa  = (ϕal-ϕag)*(  tanh.( (collect(1:Nx)/Nx .-0.75)/ϵ/l )/2 .+0.5) .+ ϕag
+    fp  = (ϕpl-ϕpg)*(tanh.( (collect(1:Nx)/Nx .-0.75)/ϵ/l )/2 .+0.5) .+ ϕpg
+    ρ = ρa+fp
+
+    m   = (ϕl-ϕg)*( -tanh.( (collect(1:Nx)/Nx .-0.75)/ϵ/l ).^2 .+1 )/2 ./(-ρ.+1)/λ/l/ϵ
+
+    Nx2 = Int64(round(Nx/2))
+    ρa[1:Nx2]  = -(ϕal-ϕag)*(  tanh.( (collect(1:Nx2)/Nx .-0.25)/ϵ/l )/2 .+0.5  ) .+ ϕal
+    fp[1:Nx2] = -(ϕpl-ϕpg)*(tanh.( (collect(1:Nx2)/Nx .-0.25)/ϵ/l )/2 .+0.5  ) .+ ϕpl
+    ρ = ρa+fp
+    m[1:Nx2]  = -(ϕl-ϕg)*( -tanh.( (collect(1:Nx2)/Nx .-0.25)/ϵ/l ).^2 .+1 )/2 ./(-ρ[1:Nx2].+1)/λ/l/ϵ
+    
+
+    fa = zeros(Nx,2)
+    fa[:,1] = (ρa - m)/2
+    fa[:,2] = circshift((ρa + m)/2,0)
+    t = 0.
+
+    @pack! density = fa , fp, t
+    return density
+end
+
+
+function initialize_sol_pm(param::Dict{String,Any}, sol, ϕg, ϕl, γ;)
+   @unpack name, D, λ, ρa, ρp, δt, Nx, Nθ, S,  E= param
+    γ = (1-ρa)/(1-ρa-ρp);
+    #find central time
+    t_mid_arg = argmax(sol[2,:])
+    t_middle = sol.t[t_mid_arg]
+    t_max = maximum(sol.t[:].-t_middle)
+    t_min = minimum(sol.t[:].-t_middle)
+    t_lim = round(min(t_max, - t_min))
+    #t_lim_index = argmin(abs.(sol.t[:].-2*t_lim))
+    
+    l = sqrt(Dx/Dθ)
+    density = Dict{String,Any}()
+    
+    ρ = fill(ϕg, Nx)
+    m = fill(0., Nx)
+    
+    Nx4  = Int64(round(Nx/4))
+    Nx2  = 2*Nx4
+    Nx34 = 3*Nx4
+    
+    ρ[(Nx4+1):1:Nx34] = fill(ϕl, Nx2)
+    
+    n_index = min(Int64(round(t_lim*l*Nx)),Nx4)
+    
+    ts1 = collect((1:(2*n_index))/Nx/l) .+ sol.t[t_mid_arg] .-n_index/Nx/l
+    ts2 = collect(((2*n_index):(-1):1)/Nx/l) .+ sol.t[t_mid_arg] .-n_index/Nx/l
+    
+    sol_index_1 = (Nx4-n_index+1):1:(Nx4+n_index)
+    sol_index_2 = (Nx34-n_index+1):1:(Nx34+n_index)
+    
+    ρ[sol_index_1] = sol.(ts1, idxs = 1)
+    m[sol_index_1] = sol.(ts1, idxs = 2)
+    
+    ρ[sol_index_2] =  sol.(ts2, idxs = 1)
+    m[sol_index_2] = -sol.(ts2, idxs = 2)
+    
+    ρa = γ*(ρ .- 1) .+1
+    fp = ρ - ρa
+    fa = zeros(Nx,2)
+    fa[:,1] = (ρa - m)/2
+    fa[:,2] = (ρa + m)/2
+    t = 0.
+    
+    @pack! density = fa , fp, t
+    return density
+end
+
+function spatial_currents_pm(fa_saves, fp_saves; param = param)
+    @unpack Nx, Nθ, ρa, ρp, χ, Dθ, Dx, k, γ,Pe,λ  = param
+    ja_saves, jp_saves = [], []
+    for i in eachindex(fa_saves)
+        fa = fa_saves[i]
+        fp =  fp_saves[i]
+
+        ρ::Array{Float64,1} = fp + sum(fa; dims =2)[:,1]
+    
+        Ua::Array{Float64,2},   Up::Array{Float64,1} = U_velocities_pm(fa,fp,ρ; Nx=Nx, Nθ=Nθ, λ=λ,γ=γ)
+        moba::Array{Float64,2}, mobp::Array{Float64,1} = mob_pm(fa,fp,ρ;γ=γ)
+        Fa::Array{Float64,2},   Fp::Array{Float64,1}  = F_fluxes_pm(Ua, Up, moba, mobp; Nx=Nx, Nθ=Nθ)
+        
+        ja = sum(Fa; dims =2)[:,1]
+        jp = Fp
+        push!(ja_saves,ja)
+        push!(jp_saves,jp)
+    end
+    return ja_saves, jp_saves
+end
+
+using DifferentialEquations
+
+function f(du,u,parameters,t)
+    Pe = parameters[1]
+    γ = parameters[2]
+    ϕ1 = parameters[3]
+    du[1] = Pe*(1-u[1])*u[2]
+    du[2] = -Pe*u[2]^2 + Pe*( (1-γ*(1-u[1]))*self_diff(u[1]) -(1-γ*(1-ϕ1))*self_diff(ϕ1) )/self_diff(u[1]) -(2/Pe)*log( (1-u[1])/(1-ϕ1) )/self_diff(u[1])
+    return du
+end
+
+function f_jac(J,u,parameters,t)
+    Pe = parameters[1]
+    γ = parameters[2]
+    ϕ1 = parameters[3]
+    J[1,1] = -Pe*u[2]
+    J[1,2] =  Pe*(1-u[1])
+    J[2,1] =  self_diff_prime(u[1])*            (2/Pe)*log( (1-u[1])/(1-ϕ1) )/self_diff(u[1])^2              + (2/Pe)/(1-u[1])/self_diff(u[1])
+    J[2,1] += self_diff_prime(u[1])*Pe*((1-γ*(1-u[1]))*self_diff(u[1]) -(1-γ*(1-ϕ1))*self_diff(ϕ1) )/self_diff(u[1])^2  + Pe*(γ*self_diff(u[1]) +(1-γ*(1-u[1]))*self_diff_prime(u[1]) )/self_diff(u[1])
+    J[2,2] = -2*Pe*u[2]
+    return J
+end
+
+function initialize_sol_pm_full(param::Dict{String,Any})
+    @unpack name, D, λ, ρa, ρp, δt, Nx, Nθ, Pe, Dx, Dθ= param
+    #copmute binodal values
+
+    ϕa = ρa
+    ϕp = ρp
+    ϕ = ϕa+ϕp
+
+    initial_Δ = 1e-4;
+    max_iter = 40;
+    tol = 1e-16;
+    atol = 1e-16;
+    rho_max = (1-10e-20);
+    γ = (1-ϕa)/(1-ϕ);
+
+    find_sol, lower_limits, upper_limits = colapse_sol_interval(;Pe = Pe, γ = γ, rho_max = rho_max, initial_Δ = initial_Δ, max_iter = max_iter, tol = tol, atol = atol);
+    ϕg = lower_limits[1]
+    ϕl = upper_limits[1]
+    ϕg, ϕl 
+    find_sol
+
+    #compute solution
+    J = zeros(2,2)
+    u = zeros(2)
+    parameters = (Pe, γ, ϕg, ϕl)
+    t = 0.
+    J = f_jac(J,u,parameters,t)
+    values, vectors = eigen(J)
+    evector2 = vectors[:,2]
+
+    ff = ODEFunction(f;jac=f_jac)
+    ϵ = 1e-15
+    initial_position = [ϕg, 0.0] + ϵ*evector2
+    time_interval = (0.0, 15.0)
+
+    ff = ODEFunction(f;jac=f_jac)
+    prob = ODEProblem(ff,initial_position,time_interval, parameters)
+
+    sol = DifferentialEquations.solve(prob,abstol = 1e-14, reltol = 1e-14);
+
+    #find central time
+    t_mid_arg = argmax(sol[2,:])
+    t_middle = sol.t[t_mid_arg]
+    t_max = maximum(sol.t[:].-t_middle)
+    t_min = minimum(sol.t[:].-t_middle)
+    t_lim = round(min(t_max, - t_min))
+    #t_lim_index = argmin(abs.(sol.t[:].-2*t_lim))
+    
+    l = sqrt(Dx/Dθ)
+    density = Dict{String,Any}()
+    
+    ρ = fill(ϕg, Nx)
+    m = fill(0., Nx)
+    
+    Nx4  = Int64(round(Nx/4))
+    Nx2  = 2*Nx4
+    Nx34 = 3*Nx4
+    
+    ρ[(Nx4+1):1:Nx34] = fill(ϕl, Nx2)
+    
+    n_index = min(Int64(round(t_lim*l*Nx)),Nx4)
+    
+    ts1 = collect((1:(2*n_index))/Nx/l) .+ sol.t[t_mid_arg] .-n_index/Nx/l
+    ts2 = collect(((2*n_index):(-1):1)/Nx/l) .+ sol.t[t_mid_arg] .-n_index/Nx/l
+    
+    sol_index_1 = (Nx4-n_index+1):1:(Nx4+n_index)
+    sol_index_2 = (Nx34-n_index+1):1:(Nx34+n_index)
+    
+    ρ[sol_index_1] = sol.(ts1, idxs = 1)
+    m[sol_index_1] = sol.(ts1, idxs = 2)
+    
+    ρ[sol_index_2] =  sol.(ts2, idxs = 1)
+    m[sol_index_2] = -sol.(ts2, idxs = 2)
+    
+    ρa = γ*(ρ .- 1) .+1
+    fp = ρ - ρa
+    fa = zeros(Nx,2)
+    fa[:,1] = (ρa - m)/2
+    fa[:,2] = (ρa + m)/2
+    t = 0.
+    
+    @pack! density = fa , fp, t
+    return density
+end
+
+println("loaded")

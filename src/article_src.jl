@@ -215,7 +215,7 @@ function find_stab_data(;stabdata = Dict{String,Any}(), ρs = 0.4:0.05:1.0, Pes 
     stabdata["ρ = $(1.)"] = data
 
     if save_on
-        wsave(filename,stabdata)
+        safesave(filename,stabdata)
     end
     return stabdata
 end
@@ -256,8 +256,9 @@ function fillout_stab_data(;stabdata = Dict{String,Any}(), ρs = 0.4:0.05:1.0, P
     #fillout ans
     stable = λs
     unstable = []
+    unclassified = []
     data = Dict{String,Any}()
-    @pack! data = stable, unstable
+    @pack! data = stable, unstable, unclassified
     stabdata["ρ = $(0.)"] = data
     stabdata["ρ = $(1.)"] = data
 
@@ -282,7 +283,7 @@ function fillout_stab_data_horizontal(;stabdata = Dict{String,Any}(), ρs = 0.0:
         if ρ ≤ 0.45
         try
             local maxstab
-            data =stabdata["ρ = 0.45"]
+            data =stabdata["ρ = 0.44"]
             @unpack stable, unstable, unclassified = data
             maxstab = maximum(stable)
             for λ ∈ λs
@@ -296,7 +297,7 @@ function fillout_stab_data_horizontal(;stabdata = Dict{String,Any}(), ρs = 0.0:
             stabdata["ρ = $(ρ)"] = data
         catch
             local maxstab
-            data =stabdata["ρ = 0.45"]
+            data = stabdata["ρ = 0.44"]
             @unpack stable, unstable, unclassified = data
             maxstab = maximum(stable)
             for λ ∈ λs
@@ -586,6 +587,41 @@ function pde_density_hist_av_load(fig::Figure, ax::PyObject, param::Dict{String,
     end
     ax.xaxis.set_ticks(0:0.2:1)
 end
+
+function pde_density_hist_av_nosave(fig::Figure, ax::PyObject,param::Dict{String,Any}; r =1, bins = 200, smoothing = false, add_label = false, label_name = "label", linewidth = 1.2, save_interval = 0.1, start_time = 2.0, end_time = 6.0)
+    @unpack Nx, Nθ, Pe, name, ρa, ρp, λ, δt, Dθ = param
+    t_saves, fa_saves, fp_saves = load_pdes_rand(param,end_time; save_interval = save_interval, start_time = start_time)
+    N = length(fa_saves)
+    H = []
+    for i in 1:N
+        fa = fa_saves[i]
+        fp = fp_saves[i]
+        ρ = fp + sum(fa; dims =3)[:,:,1].*(2*π/Nθ)
+        if smoothing
+            h = zeros(Nx,Nx)
+            B = [[i,j] for i in (-r):1:r for j in (-r):1:r ]#if (i^2+j^2) ≤ r^2]
+            n = length(B)
+            for x₁ in 1:Nx, x₂ in 1:Nx
+                for e in B
+                    y₁, y₂  = ([x₁, x₂] + e +[Nx-1,Nx-1]) .% Nx + [1,1]
+                    h[x₁,x₂] += ρ[y₁,y₂]/n
+                end
+            end
+            h = reshape(h, Nx*Nx)
+        else
+            h = reshape(ρ, Nx*Nx)
+        end
+        append!(H,h)
+    end
+    edges = collect((-1/(2*bins)):(1/(bins)):(1.0+(1/(2*bins))))
+    if add_label
+        ax.hist(H; bins = edges, histtype = "step", density = true, label = label_name, linewidth=linewidth)
+    else
+        ax.hist(H; bins = edges, histtype = "step", density = true)
+    end
+end
+
+
 
 function time_density_hist_save(param::Dict{String,Any}, t_saves, η_saves; r = 3, bins = 3, name= "label", add_label = false)
     h = [];
