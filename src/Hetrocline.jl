@@ -424,6 +424,67 @@ function fake_spin_boundary(ϕas; Pe = 10.)
     return ϕa_pts, ϕp_pts
 end
 
+#plot approx spinodal
+function pm_lin_real_value(ϕa, ϕp; Pe = 7.5, Dθ = 400.0)
+    ω = 2*π/sqrt(Dθ);
+    ϕ  = ϕa + ϕp;
+    ϕ0 = 1- ϕ;
+    ds = self_diff(ϕ);
+    dsp = self_diff_prime(ϕ);
+    DD = (1-ds)/ϕ
+    s = DD - 1
+    W = [-ω^2             0          -im*ω*Pe*ϕ0; 
+        -ω^2*ϕa*DD      -ω^2*ds     -im*ω*Pe*(ϕa*s+ds); 
+        -im*ω*Pe*ϕa*dsp -im*ω*Pe*ds -ω^2*ds-2         ]
+    values,vectors = eigen(W)
+    return real(values[3])
+end
+
+function return_finite_stable_boundary_pt(ϕa; Pe = 10., Dθ = 400.0)
+    f(x) = pm_lin_real_value(ϕa, x; Pe = Pe, Dθ = Dθ)
+    return find_zeros(f,(0,1-ϕa-1e-8))
+end
+
+function return_finite_stable_boundary(ϕas; Pe = 10., Dθ = 400.0)
+    high_ϕps = []
+    low_ϕps = []
+    ϕa_low = []
+    ϕa_high = []
+    for ϕa in  ϕas
+        ϕp = return_finite_stable_boundary_pt(ϕa; Pe = Pe, Dθ = Dθ)
+        if length(ϕp)==2
+                push!(low_ϕps,minimum(ϕp))
+                push!(ϕa_low,ϕa)
+                push!(high_ϕps,maximum(ϕp))
+                push!(ϕa_high,ϕa)
+        elseif length(ϕp)==1
+                push!(high_ϕps,ϕp[1])
+                push!(ϕa_high,ϕa)
+        end
+    end
+    return ϕa_low, ϕa_high, low_ϕps, high_ϕps
+end
+
+function return_finite_stable_boundary_extra(ϕas; Pe = 10., Dθ = 400.0)
+    high_ϕps = []
+    mid_ϕps = []
+    low_ϕps = []
+    ϕa_low = []
+    ϕa_mid = []
+    ϕa_high = []
+    for ϕa in  ϕas
+        ϕp = return_finite_stable_boundary_pt(ϕa; Pe = Pe, Dθ = Dθ)
+        if length(ϕp)==3
+            push!(low_ϕps,minimum(ϕp))
+            push!(ϕa_low,ϕa)
+            push!(high_ϕps,maximum(ϕp))
+            push!(ϕa_high,ϕa)
+            push!(mid_ϕps,ϕp[2])
+            push!(ϕa_mid,ϕa)
+        end
+    end
+    return ϕa_low, ϕa_mid, ϕa_high, low_ϕps, mid_ϕps, high_ϕps
+end
 
 
 

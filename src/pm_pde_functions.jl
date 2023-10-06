@@ -335,6 +335,38 @@ function perturb_pde_pm!(param::Dict{String,Any}, density::Dict{String,Any}; δ 
         Pact = (x) -> real.( vector[2]*exp(im*x*2*π/Nx) );
         Pmag = (x) -> real.( vector[3]*exp(im*x*2*π/Nx) );
     end
+    if pert == "pm_lin_binod"
+        ϕa = ρa
+        ϕp = ρp
+        ϕ = ϕa+ϕp
+        γ = (1-ϕa)/(1-ϕ)
+
+        ϕg = ϕ
+        try
+            # compute binodal
+                initial_Δ = 1e-4;
+                max_iter = 40;
+                tol = 1e-15;
+                atol = 1e-12;
+                rho_max = (1-10e-20);
+
+            find_sol, lower_limits, upper_limits = colapse_sol_interval(;Pe = Pe, γ = γ, rho_max = rho_max, initial_Δ = initial_Δ, max_iter = max_iter, tol = tol, atol = atol);
+            ϕg = lower_limits[1]
+
+            if find_sol
+                ϕg = ϕg
+            else
+                ϕg = ϕ
+            end
+        catch
+            ϕg = ϕ
+        end
+
+        ω, value, vector = pm_lin_binod_pert(param,ϕg,γ)
+        Prho = (x) -> real.( vector[1]*exp(im*x*4*π/Nx) );
+        Pact = (x) -> real.( vector[2]*exp(im*x*4*π/Nx) );
+        Pmag = (x) -> real.( vector[3]*exp(im*x*4*π/Nx) );
+    end
     if pert == "rand"
         Pa = (x,θ) -> δ*ρa*(( rand() - 0.5 )/(ρa+0.01))/(2*π);
         Pp = (x) -> δ*ρp*( rand() - 0.5 )/(ρp+0.01);
@@ -357,6 +389,12 @@ function perturb_pde_pm!(param::Dict{String,Any}, density::Dict{String,Any}; δ 
             pertp[x₁] += min(10*δ, ρ*(1-ρ)/2)*Pp(x₁)/2;
         end
     elseif pert == "pm_lin"
+        for x₁ in 1:Nx
+            perta[x₁, 1] += (Pact(x₁)-Pmag(x₁))/2
+            perta[x₁, 2] += (Pact(x₁)+Pmag(x₁))/2
+            pertp[x₁]    += Prho(x₁)-Pact(x₁)
+        end
+    elseif pert == "pm_lin_binod"
         for x₁ in 1:Nx
             perta[x₁, 1] += (Pact(x₁)-Pmag(x₁))/2
             perta[x₁, 2] += (Pact(x₁)+Pmag(x₁))/2
@@ -392,6 +430,24 @@ function pm_lin_pert(param)
     ϕa = ρa;
     ϕp = ρp;
     ϕ  = ϕa + ϕp;
+    ϕ0 = 1- ϕ;
+    ds = self_diff(ϕ);
+    dsp = self_diff_prime(ϕ);
+    DD = (1-ds)/ϕ
+    s = DD - 1
+    W = [-ω^2             0          -im*ω*Pe*ϕ0; 
+        -ω^2*ϕa*DD      -ω^2*ds     -im*ω*Pe*(ϕa*s+ds); 
+        -im*ω*Pe*ϕa*dsp -im*ω*Pe*ds -ω^2*ds-2         ]
+    values,vectors = eigen(W)
+    return ω, values[3], vectors[:,3]
+end
+
+function pm_lin_binod_pert(param,ϕg, γ)
+    @unpack S, ρa, ρp, λ, Nx, Nθ, Dx, Pe, Dθ = param
+    ω = 4*π/sqrt(Dθ);
+    ϕa = 1-γ*(1-ϕg);
+    ϕp = ϕg-ϕa;
+    ϕ  = ϕg;
     ϕ0 = 1- ϕ;
     ds = self_diff(ϕ);
     dsp = self_diff_prime(ϕ);
@@ -463,6 +519,13 @@ end
 function binodal_pde_run_pm(param)
     @unpack T, save_interval, max_steps = param
     density = initialize_sol_pm_full(param)
+    run_pde_until_pm!(param,density,T; save_on = true, max_steps = max_steps, save_interval = save_interval)
+end
+
+function binodal_pert_pde_run_pm(param)
+    @unpack T, save_interval, max_steps, pert, δ = param
+    density = initialize_sol_pm_full(param)
+    perturb_pde_pm!(param,density; δ = δ, pert = pert)
     run_pde_until_pm!(param,density,T; save_on = true, max_steps = max_steps, save_interval = save_interval)
 end
 
@@ -1250,82 +1313,127 @@ function initialize_sol_pm_full(param::Dict{String,Any})
     ϕa = ρa
     ϕp = ρp
     ϕ = ϕa+ϕp
+    γ = (1-ϕa)/(1-ϕ)
 
-    initial_Δ = 1e-4;
-    max_iter = 40;
-    tol = 1e-16;
-    atol = 1e-16;
-    rho_max = (1-10e-20);
-    γ = (1-ϕa)/(1-ϕ);
-
-    find_sol, lower_limits, upper_limits = colapse_sol_interval(;Pe = Pe, γ = γ, rho_max = rho_max, initial_Δ = initial_Δ, max_iter = max_iter, tol = tol, atol = atol);
-    ϕg = lower_limits[1]
-    ϕl = upper_limits[1]
-    ϕg, ϕl 
-    find_sol
-
-    #compute solution
-    J = zeros(2,2)
-    u = zeros(2)
-    parameters = (Pe, γ, ϕg, ϕl)
-    t = 0.
-    J = f_jac(J,u,parameters,t)
-    values, vectors = eigen(J)
-    evector2 = vectors[:,2]
-
-    ff = ODEFunction(f;jac=f_jac)
-    ϵ = 1e-15
-    initial_position = [ϕg, 0.0] + ϵ*evector2
-    time_interval = (0.0, 15.0)
-
-    ff = ODEFunction(f;jac=f_jac)
-    prob = ODEProblem(ff,initial_position,time_interval, parameters)
-
-    sol = DifferentialEquations.solve(prob,abstol = 1e-14, reltol = 1e-14);
-
-    #find central time
-    t_mid_arg = argmax(sol[2,:])
-    t_middle = sol.t[t_mid_arg]
-    t_max = maximum(sol.t[:].-t_middle)
-    t_min = minimum(sol.t[:].-t_middle)
-    t_lim = round(min(t_max, - t_min))
-    #t_lim_index = argmin(abs.(sol.t[:].-2*t_lim))
-    
-    l = sqrt(Dx/Dθ)
+    ϕg = ϕ
+    ϕl = ϕ
+    find_sol = false
     density = Dict{String,Any}()
+    try
+        # compute binodal
+        initial_Δ = 1e-4;
+        max_iter = 40;
+        tol = 1e-15;
+        atol = 1e-12;
+        rho_max = (1-10e-20);
+
+        find_sol, lower_limits, upper_limits = colapse_sol_interval(;Pe = Pe, γ = γ, rho_max = rho_max, initial_Δ = initial_Δ, max_iter = max_iter, tol = tol, atol = atol);
+        ϕg = lower_limits[1]
+        ϕl = upper_limits[1]
+        ##
+    catch
+        find_sol = false
+    end
+    fa = fill(ϕa/2,(Nx,2))
+    fp = fill(ϕa/2,Nx)
+
+    if find_sol
+        ϕg = ϕg
+        ϕl = ϕl
     
-    ρ = fill(ϕg, Nx)
-    m = fill(0., Nx)
+
+        #compute solution
+        J = zeros(2,2)
+        u = zeros(2)
+        parameters = (Pe, γ, ϕg, ϕl)
+        t = 0.
+        J = f_jac(J,u,parameters,t)
+        values, vectors = eigen(J)
+        evector2 = vectors[:,2]
+
+        ff = ODEFunction(f;jac=f_jac)
+        ϵ = 1e-10
+        initial_position = [ϕg, 0.0] + ϵ*evector2
+        time_interval = (0.0, 100.0)
+
+        ff = ODEFunction(f;jac=f_jac)
+        prob = ODEProblem(ff,initial_position,time_interval, parameters)
+
+        sol = DifferentialEquations.solve(prob,abstol = 1e-15, reltol = 1e-15);
+        ##
+
+        #find central time
+        #check if m<0 or rho> phil
+            sol_len = length(sol.t)
+            ind_max = 1
+            while (sol[1,ind_max]< ϕl)&&(sol[2,ind_max] ≥0)&&(ind_max<sol_len)
+                ind_max += 1
+            end
+            #find central time
+            t_mid_arg = argmax(sol[2,1:ind_max])
+            t_middle = sol.t[t_mid_arg]
+            t_max = maximum(sol.t[1:ind_max].-t_middle)
+            t_min = minimum(sol.t[1:ind_max].-t_middle)
+            t_lim = round(min(t_max, - t_min))
+            t_max_index = argmax(sol.t[1:ind_max].-t_middle)
+            t_min_index = argmin(sol.t[1:ind_max].-t_middle)
+        ##
+
+
+        l = sqrt(Dx/Dθ)
+        density = Dict{String,Any}()
+        
+        ρ = fill(ϕg, Nx)
+        m = fill(0., Nx)
+        
+        Nx4  = Int64(round(Nx/4))
+        Nx2  = 2*Nx4
+        Nx34 = 3*Nx4
+        
+        ρ[(Nx4+1):1:Nx34] = fill(ϕl, Nx2)
+        
+        n_index = min(Int64(round(t_lim*l*Nx)),Nx4)
+        
+        ts1 = collect((1:(2*n_index))/Nx/l) .+ sol.t[t_mid_arg] .-n_index/Nx/l
+        ts2 = collect(((2*n_index):(-1):1)/Nx/l) .+ sol.t[t_mid_arg] .-n_index/Nx/l
+        
+        sol_index_1 = (Nx4-n_index+1):1:(Nx4+n_index)
+        sol_index_2 = (Nx34-n_index+1):1:(Nx34+n_index)
+        
+        ρ[sol_index_1] = sol.(ts1, idxs = 1)
+        m[sol_index_1] = sol.(ts1, idxs = 2)
+        
+        ρ[sol_index_2] =  sol.(ts2, idxs = 1)
+        m[sol_index_2] = -sol.(ts2, idxs = 2)
+        
+        ρa = γ*(ρ .- 1) .+1
+        fp = ρ - ρa
+        fa = zeros(Nx,2)
+        fa[:,1] = (ρa - m)/2
+        fa[:,2] = (ρa + m)/2
+    end
     
-    Nx4  = Int64(round(Nx/4))
-    Nx2  = 2*Nx4
-    Nx34 = 3*Nx4
-    
-    ρ[(Nx4+1):1:Nx34] = fill(ϕl, Nx2)
-    
-    n_index = min(Int64(round(t_lim*l*Nx)),Nx4)
-    
-    ts1 = collect((1:(2*n_index))/Nx/l) .+ sol.t[t_mid_arg] .-n_index/Nx/l
-    ts2 = collect(((2*n_index):(-1):1)/Nx/l) .+ sol.t[t_mid_arg] .-n_index/Nx/l
-    
-    sol_index_1 = (Nx4-n_index+1):1:(Nx4+n_index)
-    sol_index_2 = (Nx34-n_index+1):1:(Nx34+n_index)
-    
-    ρ[sol_index_1] = sol.(ts1, idxs = 1)
-    m[sol_index_1] = sol.(ts1, idxs = 2)
-    
-    ρ[sol_index_2] =  sol.(ts2, idxs = 1)
-    m[sol_index_2] = -sol.(ts2, idxs = 2)
-    
-    ρa = γ*(ρ .- 1) .+1
-    fp = ρ - ρa
-    fa = zeros(Nx,2)
-    fa[:,1] = (ρa - m)/2
-    fa[:,2] = (ρa + m)/2
     t = 0.
-    
     @pack! density = fa , fp, t
     return density
+end
+
+function pm_lin_binod_pert(param)
+    @unpack S, ρa, ρp, λ, Nx, Nθ, Dx, Pe, Dθ, γ = param
+    ω = 4*π/sqrt(Dθ);
+    ϕa = ρa;
+    ϕp = ρp;
+    ϕ  = ϕa + ϕp;
+    ϕ0 = 1- ϕ;
+    ds = self_diff(ϕ);
+    dsp = self_diff_prime(ϕ);
+    DD = (1-ds)/ϕ
+    s = DD - 1
+    W = [-ω^2             0          -im*ω*Pe*ϕ0; 
+        -ω^2*ϕa*DD      -ω^2*ds     -im*ω*Pe*(ϕa*s+ds); 
+        -im*ω*Pe*ϕa*dsp -im*ω*Pe*ds -ω^2*ds-2         ]
+    values,vectors = eigen(W)
+    return ω, values[3], vectors[:,3]
 end
 
 println("loaded")
