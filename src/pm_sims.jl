@@ -109,7 +109,7 @@ using StatsBase, DrWatson, Random
         return "/store/DAMTP/jm2386/Active_Lattice/data/pm_sims_raw/$(name)/[DT,v0,DR,N,Lx,Ly,ϕa,ϕp]=$([DT,v0,DR,N,Lx,Ly,ϕa,ϕp])/t=$(s).jld2"
     end
 
-    function time_series_save_name(param::Dict{String, Any},t::Float64)
+    function sim_time_series_save_name(param::Dict{String, Any},t::Float64)
         @unpack DT, v0, DR, N, Lx, Ly, ϕa, ϕp, name, save_interval = param
         s = round(t ; digits = Int64( -log10(save_interval) ÷ 1 ))
         return "/store/DAMTP/jm2386/Active_Lattice/data/pm_sims_pro/$(name)/[DT,v0,DR,N,Lx,Ly,ϕa,ϕp]=$([DT,v0,DR,N,Lx,Ly,ϕa,ϕp])/t=$(s).jld2"
@@ -119,7 +119,7 @@ using StatsBase, DrWatson, Random
         filename::String = sim_save_name(param::Dict{String, Any},t::Float64)
         data::Dict{String, Any} = load(filename)
         @unpack η, t = data 
-        return η, t
+        return t, η
     end
 
     function load_compress_sim(param::Dict{String, Any})
@@ -130,10 +130,10 @@ using StatsBase, DrWatson, Random
 
         try
             try
-                filename::String = time_series_save_name(param,T)
+                filename::String = sim_time_series_save_name(param,T)
                 data = load(filename)
             catch
-                filename::String = time_series_save_name(param,T-save_interval)
+                filename::String = sim_time_series_save_name(param,T-save_interval)
                 data= load(filename)
             end
             @unpack t_saves, η_saves = data
@@ -144,7 +144,7 @@ using StatsBase, DrWatson, Random
             t = 0.
             while s<T
                 try
-                    η, t = load_sim(param,s)
+                    t, η = load_sim(param,s)
                     push!(η_saves,η)
                     push!(t_saves,t)
                     s += save_interval
@@ -153,7 +153,7 @@ using StatsBase, DrWatson, Random
                 end
             end
             if t > 0.
-                filename::String = time_series_save_name(param,t)
+                filename::String = sim_time_series_save_name(param,t)
                 data = Dict("η_saves" => η_saves, "t_saves" => t_saves)
                 safesave(filename,data)
                 println("saved")
@@ -194,7 +194,7 @@ using StatsBase, DrWatson, Random
             end
             s += save_interval
         end
-        return η, w, t
+        return t, η, w
     end
 
     function run_current_sim(param::Dict{String, Any},dt::Float64, η::Array{Float64, 3}, w::Weights{Float64, Float64, Vector{Float64}}, t::Float64)
@@ -202,7 +202,8 @@ using StatsBase, DrWatson, Random
         # configuration
         s::Float64 = t + save_interval
         jumps::Vector{Tuple{Int64, Int64}} = [(i,j) for i in -1:1:1, j in -1:1:1 if i^2+j^2 ==1 ];
-        
+        t_end::Float64 = t+dt
+
         #inital save
         if save_on
             filename::String = sim_save_name(param,t)
@@ -210,7 +211,7 @@ using StatsBase, DrWatson, Random
             safesave(filename,data)
         end
 
-        while t < t+dt
+        while t < t_end
             while t < s
                 t = model_step!(η, w, t, N₁, N₂, DT, v0, DR, N, jumps);
             end
@@ -222,7 +223,7 @@ using StatsBase, DrWatson, Random
             end
             s += save_interval
         end
-        return η, w, t
+        return t, η, w
     end
 
     function load_and_run_sim(param::Dict{String, Any})
@@ -237,7 +238,7 @@ using StatsBase, DrWatson, Random
         
         while s>0.
             try
-                η, t = load_sim(sim_param,s)
+                t, η = load_sim(param,s)
                 w = initiate_weights(η, N₁, N₂, DT, v0, DR,N);
                 loaded = true
                 s = -1.
@@ -265,9 +266,9 @@ using StatsBase, DrWatson, Random
             end
         else
             println("all loading failed; running new simulation")
-            η, w, t = run_new_sim(param)
+            t, η, w = run_new_sim(param)
         end
-        return η, w, t
+        return t, η, w
     end
 #
 
@@ -349,4 +350,4 @@ using StatsBase, DrWatson, Random
     end
 #
 
-println("v1.2")
+println("v2.0")
