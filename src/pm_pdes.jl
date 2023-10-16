@@ -271,14 +271,28 @@ using TensorOperations
         return ω, values[3], vectors[:,3]
     end
 
+    function dist_from_unif(f, param)
+        @unpack DT, v0, DR, N, Lx, ϕa, ϕp, T , name, Nx, save_interval, save_on, δt, δ = param
+        return sqrt(sum( (f[:,1] .- ϕa/2).^2 + (f[:,2] .- ϕa/2).^2 + (f[:,3] .- ϕp).^2   ))
+    end
+
     function perturb_pde!(f::Array{Float64,2}, param::Dict{String, Any})
         @unpack DT, v0, DR, N, Lx, ϕa, ϕp, T , name, Nx, save_interval, save_on, δt, δ = param
     
         ω, value, vector = pm_lin_pert(param)
 
-        
-    end
+        wave::Array{ComplexF64,2}   = exp.((1:Nx)*(im*2*π/Nx))
+        pertf::Array{Float64,2}     = zeros(Nx,3)
 
+        pertf[:,1] = real.( wave*(vector[1]- vector[2])/2 )
+        pertf[:,2] = real.( wave*(vector[1]+ vector[2])/2 ) 
+        pertf[:,3] = real.( wave*(vector[3]) )
+
+        c = dist_from_unif(f,param)
+        f += δ*perta/c
+
+        return f
+    end
 #
 
 ## complete functions 
@@ -287,6 +301,7 @@ using TensorOperations
         @unpack DT, v0, DR, N, Lx, ϕa, ϕp, T , name, Nx, save_interval, save_on, δt = param
         # configuration
         f::Array{Float64, 3} = initiate_uniform_pde(ϕa, ϕp, Nx);
+        perturb_pde!(f, param);
         t::Float64 = 0.;
         s::Float64 = save_interval
 
