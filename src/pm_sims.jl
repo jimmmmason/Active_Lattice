@@ -275,9 +275,7 @@ using StatsBase, DrWatson, Random
 ## proccessing funcitons 
 
     function local_average(η, ϵ, N, N₁, N₂)
-        ρa::Array{Float64,2} = zeros(N₁, N₂)
-        ρp::Array{Float64,2} = zeros(N₁, N₂)
-        m ::Array{Float64,2} = zeros(N₁, N₂)
+        f::Array{Float64,3} = zeros(N₁, N₂,3)
         jumps::Vector{Tuple{Int64, Int64}} = [(i,j) for i in -N₁:1:N₁, j in -N₂:1:N₂ if i^2+j^2 ≤ ϵ*N ];
         njumps::Int64 = length(jumps)
         for x₁ in 1:N₁, x₂ in 1:N₂
@@ -285,18 +283,16 @@ using StatsBase, DrWatson, Random
                 local y₁::Int64, y₂::Int64
                 # find adjacent site
                 y₁, y₂ = ( (x₁, x₂) .+ jump .+ (N₁-1, N₂-1) ).% (N₁, N₂) .+ (1,1)
-                ρa[x₁, x₂] += η[y₁, y₂,2]^2
-                ρp[x₁, x₂] += η[y₁, y₂,1]^2-η[y₁, y₂,2]^2
-                m[x₁, x₂]  += η[y₁, y₂,2]
+                f[x₁, x₂,1] += (η[y₁, y₂,2]^2-η[y₁, y₂,2])/2
+                f[x₁, x₂,2] += (η[y₁, y₂,2]^2+η[y₁, y₂,2])/2
+                f[x₁, x₂,3] += (η[y₁, y₂,1]^2-η[y₁, y₂,2]^2)
             end
         end
-        return (ρa, ρp, m)./njumps
+        return f/njumps
     end
 
     function local_average_1d(η, ϵ, N, N₁, N₂)
-        ρa::Vector{Float64} = zeros(N₁)
-        ρp::Vector{Float64} = zeros(N₁)
-        m ::Vector{Float64} = zeros(N₁)
+        f::Matirx{Float64} = zeros(N₁,3)
         jumps::Vector{Tuple{Int64, Int64}} = [(i,j) for i in -N₁:1:N₁, j in -N₂:1:N₂ if i^2+j^2 ≤ ϵ*N ];
         njumps::Int64 = length(jumps)
         for x₁ in 1:N₁, x₂ in 1:N₂
@@ -304,19 +300,17 @@ using StatsBase, DrWatson, Random
                 local y₁::Int64, y₂::Int64
                 # find adjacent site
                 y₁, y₂ = ( (x₁, x₂) .+ jump .+ (N₁-1, N₂-1) ).% (N₁, N₂) .+ (1,1)
-                ρa[x₁] += η[y₁, y₂,2]^2
-                ρp[x₁] += η[y₁, y₂,1]^2-η[y₁, y₂,2]^2
-                m[x₁]  += η[y₁, y₂,2]
+                f[x₁,1] += (η[y₁, y₂,2]^2-η[y₁, y₂,2])/2
+                f[x₁,2] += (η[y₁, y₂,2]^2+η[y₁, y₂,2])/2
+                f[x₁,3] += (η[y₁, y₂,1]^2-η[y₁, y₂,2]^2)
             end
         end
-        return (ρa, ρp, m)./(njumps*N₂)
+        return f/(njumps*N₂)
     end
 
     function local_average_timeseries(η_saves, ϵ, N, N₁, N₂)
         num_t = length(η_saves)
-        ρa::Array{Float64,2} = zeros(num_t,N₁)
-        ρp::Array{Float64,2} = zeros(num_t,N₁)
-        m ::Array{Float64,2} = zeros(num_t,N₁)
+        ft::Array{Float64,3} = zeros(num_t,N₁,3)
         jumps::Vector{Tuple{Int64, Int64}} = [(i,j) for i in -N₁:1:N₁, j in -N₂:1:N₂ if i^2+j^2 ≤ ϵ*N ];
         njumps::Int64 = length(jumps)
         for (i,η) in enumerate(η_saves)
@@ -325,29 +319,26 @@ using StatsBase, DrWatson, Random
                     local y₁::Int64, y₂::Int64
                     # find adjacent site
                     y₁, y₂ = ( (x₁, x₂) .+ jump .+ (N₁-1, N₂-1) ).% (N₁, N₂) .+ (1,1)
-                    ρa[i,x₁] += η[y₁, y₂,2]^2
-                    ρp[i,x₁] += η[y₁, y₂,1]^2-η[y₁, y₂,2]^2
-                    m[i,x₁]  += η[y₁, y₂,2]
+                    ft[i,x₁,1] += (η[y₁, y₂,2]^2-η[y₁, y₂,2])/2
+                    ft[i,x₁,2] += (η[y₁, y₂,2]^2+η[y₁, y₂,2])/2
+                    ft[i,x₁,3] += η[y₁, y₂,1]^2-η[y₁, y₂,2]^2
                 end
             end
         end
-        return (ρa, ρp, m)./(njumps*N₂)
+        return ft./(njumps*N₂)
     end
     
-    function rho_to_rgb(ρa, ρp, m; type = "rho" )
-        Nx, Ny = size(ρa)
-        rgb_image = ones(Ny, Nx,3)
-        if type == "rho"
-            rgb_image[:,:,3] = -ρa'[Ny:-1:1,:]  .+1
-            rgb_image[:,:,1] = -ρp'[Ny:-1:1,:] .+1
-            rgb_image[:,:,2] = -ρa'[Ny:-1:1,:]  -ρp'[Ny:-1:1,:]  .+1
-        else
-            rgb_image[:,:,1] = map((x ->  max(0,x)), m'[Ny:-1:1,:])
-            rgb_image[:,:,2] = map((x -> -min(0,x)), m'[Ny:-1:1,:])
-            rgb_image[:,:,3] = -ρa'[Ny:-1:1,:] -ρp'[Ny:-1:1,:] .+1
-        end
+    function rho_to_rgb(f)
+        Nx, Ny, k = size(f)
+        rgb_image = ones(Ny,Nx,3)
+    
+        rgb_image[:,:,3] = -f[:,Ny:-1:1,1]' -f[:,Ny:-1:1,2]' .+1
+        rgb_image[:,:,1] = -f[:,Ny:-1:1,3]' .+1
+        rgb_image[:,:,2] = -f[:,Ny:-1:1,1]' -f[:,Ny:-1:1,2]'  -f[:,Ny:-1:1,3]'  .+1
+    
         return rgb_image
     end
+    
 #
 
-println("v2.0")
+println("v2.1")
