@@ -19,9 +19,9 @@ params = []
 ϕas = [0.5, 0.3]
 ϕps = [0.1, 0.6]
 DT, v0, DR, N, Lx, Ly = (1.0, 20.0, 1.0, 100, 2.0, 0.5);
-T = 5.
+T = 20.
 sim_name = "sim_run_2"
-save_interval = 0.001
+save_interval = 0.01
 map(ϕas, ϕps) do ϕa, ϕp
     sim_param = new_sim_param(DT, v0, DR, N, Lx, Ly, ϕa, ϕp; T = T, name = sim_name, save_interval = save_interval, save_on = true);   
     push!(params,sim_param)

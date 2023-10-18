@@ -187,7 +187,7 @@ using TensorOperations, LinearAlgebra
     
         f -= dt*( site_div_2d(F; Nx=Nx, Lx=Lx) + DR*flip_term(f; Nx=Nx) )
         t += dt
-        return t
+        return t, f
     end
 #
 
@@ -288,20 +288,20 @@ using TensorOperations, LinearAlgebra
         pertf[:,2] = real.( wave*(vector[1]+ vector[2])/2 ) 
         pertf[:,3] = real.( wave*(vector[3]) )
 
-        c = dist_from_unif(f,param)
+        c = norm(pertf)
         f += δ*pertf/c
 
         return f
     end
 #
 
-## complete functions 
+## solving functions 
 
     function run_new_pde(param::Dict{String, Any})
         @unpack DT, v0, DR, N, Lx, ϕa, ϕp, T , name, Nx, save_interval, save_on, δt = param
         # configuration
         f::Matrix{Float64} = initiate_uniform_pde(ϕa, ϕp, Nx);
-        perturb_pde!(f, param);
+        f = perturb_pde!(f, param);
         t::Float64 = 0.;
         s::Float64 = save_interval
 
@@ -314,7 +314,7 @@ using TensorOperations, LinearAlgebra
 
         while t < T
             while t < s
-                t = time_step!(t, f; δt=δt, Nx=Nx, Lx=Lx, DT=DT, v0=v0, DR=DR);
+                t, f = time_step!(t, f; δt=δt, Nx=Nx, Lx=Lx, DT=DT, v0=v0, DR=DR);
             end
             #save snapshot
             if save_on
@@ -342,7 +342,7 @@ using TensorOperations, LinearAlgebra
 
         while t < t_end
             while t < s
-                t = time_step!(t, f; δt=δt, Nx=Nx, Lx=Lx, DT=DT, v0=v0, DR=DR);
+                t, f = time_step!(t, f; δt=δt, Nx=Nx, Lx=Lx, DT=DT, v0=v0, DR=DR);
             end
             #save snapshot
             if save_on
@@ -379,7 +379,7 @@ using TensorOperations, LinearAlgebra
             s = t + save_interval
             while t < T
                 while t < s
-                    t = time_step!(t, f; δt=δt, Nx=Nx, Lx=Lx, DT=DT, v0=v0, DR=DR);
+                    t, f = time_step!(t, f; δt=δt, Nx=Nx, Lx=Lx, DT=DT, v0=v0, DR=DR);
                 end
                 #save snapshot
                 if save_on
@@ -414,4 +414,4 @@ using TensorOperations, LinearAlgebra
     # end
 #
 
-println("v1.0")
+println("v2.1")

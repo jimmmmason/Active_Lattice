@@ -164,7 +164,7 @@ using StatsBase, DrWatson, Random
     end
 #
 
-## complete functions 
+## simulation functions 
 
     function run_new_sim(param::Dict{String, Any})
         @unpack DT, v0, DR, N, Lx, ϕa, ϕp, T , name, N₁, N₂, save_interval, save_on = param
