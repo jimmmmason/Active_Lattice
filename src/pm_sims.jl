@@ -112,7 +112,7 @@ using StatsBase, DrWatson, Random
     function sim_time_series_save_name(param::Dict{String, Any},t::Float64)
         @unpack DT, v0, DR, N, Lx, Ly, ϕa, ϕp, name, save_interval = param
         s = round(t ; digits = Int64( -log10(save_interval) ÷ 1 ))
-        return "/store/DAMTP/jm2386/Active_Lattice/data/pm_sims_pro/$(name)/[DT,v0,DR,N,Lx,Ly,ϕa,ϕp]=$([DT,v0,DR,N,Lx,Ly,ϕa,ϕp])/t=$(s).jld2"
+        return "/store/DAMTP/jm2386/Active_Lattice/data/pm_sims_pro/$(name)/[DT,v0,DR,N,Lx,Ly,ϕa,ϕp]=$([DT,v0,DR,N,Lx,Ly,ϕa,ϕp])/T=$(s)_Δt=$(save_interval).jld2"
     end
 
     function load_sim(param::Dict{String, Any},t::Float64)
@@ -328,17 +328,17 @@ using StatsBase, DrWatson, Random
         return ft./(njumps*N₂)
     end
     
-    function rho_to_rgb(f)
-        Nx, Ny, k = size(f)
-        rgb_image = ones(Ny,Nx,3)
+    # function rho_to_rgb(f)
+    #     Nx, Ny, k = size(f)
+    #     rgb_image = ones(Ny,Nx,3)
     
-        rgb_image[:,:,3] = -f[:,Ny:-1:1,1]' -f[:,Ny:-1:1,2]' .+1
-        rgb_image[:,:,1] = -f[:,Ny:-1:1,3]' .+1
-        rgb_image[:,:,2] = -f[:,Ny:-1:1,1]' -f[:,Ny:-1:1,2]'  -f[:,Ny:-1:1,3]'  .+1
+    #     rgb_image[:,:,3] = -f[:,Ny:-1:1,1]' -f[:,Ny:-1:1,2]' .+1
+    #     rgb_image[:,:,1] = -f[:,Ny:-1:1,3]' .+1
+    #     rgb_image[:,:,2] = -f[:,Ny:-1:1,1]' -f[:,Ny:-1:1,2]'  -f[:,Ny:-1:1,3]'  .+1
     
-        return rgb_image
-    end
+    #     return rgb_image
+    # end
     
 #
 
-println("v2.1")
+println("v3.0")

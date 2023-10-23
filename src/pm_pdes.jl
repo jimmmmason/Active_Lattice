@@ -134,10 +134,10 @@ using TensorOperations, LinearAlgebra
 #
 
 ## running pde 
-    function new_pde_param(DT::Float64, v0::Float64, DR::Float64, N::Int64, Lx::Float64, ϕa::Float64, ϕp::Float64, δt::Float64, δ::Float64; T::Float64 = 0.001, name::String = "test", save_interval::Float64 = 0.001, save_on::Bool = false)
+    function new_pde_param(DT::Float64, v0::Float64, DR::Float64, Δx::Float64, Lx::Float64, ϕa::Float64, ϕp::Float64, δt::Float64, δ::Float64; T::Float64 = 0.001, name::String = "test", save_interval::Float64 = 0.001, save_on::Bool = false)
         param::Dict{String, Any} = Dict{String,Any}()
-        Nx::Int64 = Int64(Lx*N ÷ 1)
-        @pack! param = DT, v0, DR, N, Lx, ϕa, ϕp, δt, δ, T , name, Nx, save_interval, save_on
+        Nx::Int64 = Int64(Lx/Δx ÷ 1)
+        @pack! param = DT, v0, DR, Δx, Lx, ϕa, ϕp, δt, δ, T , name, Nx, save_interval, save_on
         return param
     end
 
@@ -193,15 +193,15 @@ using TensorOperations, LinearAlgebra
 
 ## saving funcitons 
     function pde_save_name(param::Dict{String, Any},t::Float64)
-        @unpack DT, v0, DR, N, Lx, ϕa, ϕp, name, save_interval = param
+        @unpack DT, v0, DR, Δx, Lx, ϕa, ϕp, name, save_interval = param
         s = round(t ; digits = Int64( -log10(save_interval) ÷ 1 ))
-        return "/store/DAMTP/jm2386/Active_Lattice/data/pm_pdes_raw/$(name)/[DT,v0,DR,N,Lx,ϕa,ϕp]=$([DT,v0,DR,N,Lx,ϕa,ϕp])/t=$(s).jld2"
+        return "/store/DAMTP/jm2386/Active_Lattice/data/pm_pdes_raw/$(name)/[DT,v0,DR,Δx,Lx,ϕa,ϕp]=$([DT,v0,DR,Δx,Lx,ϕa,ϕp])/t=$(s).jld2"
     end
 
     function pde_time_series_save_name(param::Dict{String, Any},t::Float64)
-        @unpack DT, v0, DR, N, Lx, ϕa, ϕp, name, save_interval = param
+        @unpack DT, v0, DR, Δx, Lx, ϕa, ϕp, name, save_interval = param
         s = round(t ; digits = Int64( -log10(save_interval) ÷ 1 ))
-        return "/store/DAMTP/jm2386/Active_Lattice/data/pm_pdes_pro/$(name)/[DT,v0,DR,N,Lx,ϕa,ϕp]=$([DT,v0,DR,N,Lx,ϕa,ϕp])/t=$(s).jld2"
+        return "/store/DAMTP/jm2386/Active_Lattice/data/pm_pdes_pro/$(name)/[DT,v0,DR,Δx,Lx,ϕa,ϕp]=$([DT,v0,DR,Δx,Lx,ϕa,ϕp])/T=$(s)_Δt=$(save_interval).jld2"
     end
 
     function load_pde(param::Dict{String, Any},t::Float64)
@@ -212,7 +212,7 @@ using TensorOperations, LinearAlgebra
     end
 
     function load_compress_pde(param::Dict{String, Any})
-        @unpack DT, v0, DR, N, Lx, ϕa, ϕp, T , name, N, save_interval, save_on = param
+        @unpack DT, v0, DR, Δx, Lx, ϕa, ϕp, T , name, save_interval, save_on = param
         t_saves::Vector{Float64}            = []
         f_saves::Vector{Matrix{Float64}}  = []
         data::Dict{String, Any} = Dict()
@@ -272,12 +272,12 @@ using TensorOperations, LinearAlgebra
     end
 
     function dist_from_unif(f, param)
-        @unpack DT, v0, DR, N, Lx, ϕa, ϕp, T , name, Nx, save_interval, save_on, δt, δ = param
+        @unpack DT, v0, DR, Δx, Lx, ϕa, ϕp, T , name, Nx, save_interval, save_on, δt, δ = param
         return sqrt(sum( (f[:,1] .- ϕa/2).^2 + (f[:,2] .- ϕa/2).^2 + (f[:,3] .- ϕp).^2   ))
     end
 
     function perturb_pde!(f::Matrix{Float64}, param::Dict{String, Any})
-        @unpack DT, v0, DR, N, Lx, ϕa, ϕp, T , name, Nx, save_interval, save_on, δt, δ = param
+        @unpack DT, v0, DR, Δx, Lx, ϕa, ϕp, T , name, Nx, save_interval, save_on, δt, δ = param
     
         ω, value, vector = lin_pert_values(param)
 
@@ -298,7 +298,7 @@ using TensorOperations, LinearAlgebra
 ## solving functions 
 
     function run_new_pde(param::Dict{String, Any})
-        @unpack DT, v0, DR, N, Lx, ϕa, ϕp, T , name, Nx, save_interval, save_on, δt = param
+        @unpack DT, v0, DR, Δx, Lx, ϕa, ϕp, T , name, Nx, save_interval, save_on, δt = param
         # configuration
         f::Matrix{Float64} = initiate_uniform_pde(ϕa, ϕp, Nx);
         f = perturb_pde!(f, param);
@@ -328,7 +328,7 @@ using TensorOperations, LinearAlgebra
     end
 
     function run_current_pde(param::Dict{String, Any},dt::Float64, f::Matrix{Float64},t::Float64)
-        @unpack DT, v0, DR, N, Lx, ϕa, ϕp, T , name, Nx, save_interval, save_on, δt = param
+        @unpack DT, v0, DR, Δx, Lx, ϕa, ϕp, T , name, Nx, save_interval, save_on, δt = param
         # configuration
         s::Float64 = t + save_interval
         t_end::Float64 = t+dt
@@ -356,7 +356,7 @@ using TensorOperations, LinearAlgebra
     end
 
     function load_and_run_pde(param::Dict{String, Any})
-        @unpack DT, v0, DR, N, Lx, ϕa, ϕp, T , name, Nx, save_interval, save_on, δt = param
+        @unpack DT, v0, DR, Δx, Lx, ϕa, ϕp, T , name, Nx, save_interval, save_on, δt = param
         # configuration
         f::Matrix{Float64} = initiate_uniform_pde(ϕa, ϕp, Nx);
         t::Float64 = 0.;
@@ -397,21 +397,4 @@ using TensorOperations, LinearAlgebra
     end
 #
 
-## proccessing funcitons 
-    # function f_to_rgb(f; type = "rho" )
-    #     Nx, Ny = size(ρa)
-    #     rgb_image = ones(Ny, Nx,3)
-    #     if type == "rho"
-    #         rgb_image[:,:,3] = -ρa'[Ny:-1:1,:]  .+1
-    #         rgb_image[:,:,1] = -ρp'[Ny:-1:1,:] .+1
-    #         rgb_image[:,:,2] = -ρa'[Ny:-1:1,:]  -ρp'[Ny:-1:1,:]  .+1
-    #     else
-    #         rgb_image[:,:,1] = map((x ->  max(0,x)), m'[Ny:-1:1,:])
-    #         rgb_image[:,:,2] = map((x -> -min(0,x)), m'[Ny:-1:1,:])
-    #         rgb_image[:,:,3] = -ρa'[Ny:-1:1,:] -ρp'[Ny:-1:1,:] .+1
-    #     end
-    #     return rgb_image
-    # end
-#
-
-println("v2.1")
+println("v3.0")
