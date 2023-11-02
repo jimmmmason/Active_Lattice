@@ -273,7 +273,7 @@ using TensorOperations, LinearAlgebra
 
     function dist_from_unif(f, param)
         @unpack DT, v0, DR, Δx, Lx, ϕa, ϕp, T , name, Nx, save_interval, save_on, δt, δ = param
-        return sqrt(sum( (f[:,1] .- ϕa/2).^2 + (f[:,2] .- ϕa/2).^2 + (f[:,3] .- ϕp).^2   ))
+        return sqrt(sum( (f[:,1] .- ϕa/2).^2 + (f[:,2] .- ϕa/2).^2 + (f[:,3] .- ϕp).^2)/Nx)
     end
 
     function perturb_pde!(f::Matrix{Float64}, param::Dict{String, Any})
@@ -288,7 +288,7 @@ using TensorOperations, LinearAlgebra
         pertf[:,2] = real.( wave*(vector[1]+ vector[2])/2 ) 
         pertf[:,3] = real.( wave*(vector[3]) )
 
-        c = norm(pertf)
+        c = norm(pertf)/sqrt(Nx)
         f += δ*pertf/c
 
         return f
@@ -397,4 +397,4 @@ using TensorOperations, LinearAlgebra
     end
 #
 
-println("v3.0")
+println("v3.1")
