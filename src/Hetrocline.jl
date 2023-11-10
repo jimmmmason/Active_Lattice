@@ -229,6 +229,37 @@ function is_stable_value(ϕa, ϕp; Pe = 10.)
     return expr1 -4*ϕ + abs(real( sqrt(expr2^2 - 4*ϕp*β(ϕa, ϕp)*ds^2*Pe^2 +0*im)))
 end
 
+function return_spin(;Pe = Pe, Δϕ = Δϕ)
+    ϕp_grid = Δϕ:Δϕ:1
+    ϕps = []
+    ϕas_left = []
+    ϕas_right = []
+    for ϕp in ϕp_grid
+        f(x) = is_stable_value(x, ϕp; Pe = Pe)
+        try
+            ϕal, ϕar = find_zeros(f,(0,1-ϕp-1e-8))
+            push!(ϕas_left, ϕal)
+            push!(ϕas_right, ϕar)
+            push!(ϕps, ϕp)
+        catch
+        end
+    end
+    ϕa_grid = ϕas_left[end]:Δϕ:ϕas_right[end]
+    for ϕa in ϕa_grid
+        g(y) = is_stable_value(ϕa,y; Pe = Pe)
+        try
+            ϕp = find_zero(g,(0,1-ϕa-1e-8))
+            f(x) = is_stable_value(x, ϕp; Pe = Pe)
+            ϕal, ϕar = find_zeros(f,(0,1-ϕp-1e-8))
+            push!(ϕas_left, ϕal)
+            push!(ϕas_right, ϕar)
+            push!(ϕps, ϕp)
+        catch
+        end
+    end
+    return ϕas_left, ϕas_right, ϕps
+end
+
 #
 
 function return_complex_boundary_pt(ϕa; Pe = 10.)

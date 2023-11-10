@@ -31,10 +31,12 @@ end
 # Figure 2
 #create parameters
 params = []
-ϕas = fill(0.5,8)
-ϕps = collect(0.025:0.025:0.2)
-DT, v0, DR, N, Δx, Lx, Ly, δt, δ = (1.0, 7.5, 1.0, 100, 0.02, 20.0, 0.5, 1e-4, 2.0);
-T, save_interval, param_name = (10000.0, 10.0, "fig_2")
+# ϕas = fill(0.6,5)
+# ϕps = collect(0.01:0.01:0.05)
+ϕas = [0.45,0.5,0.55]
+ϕps = fill(0.25,3)
+DT, v0, DR, N, Δx, Lx, Ly, δt, δ = (1.0, 7.5, 1.0, 100, 0.05, 20.0, 0.5, 1e-4, 0.1);
+T, save_interval, param_name = (4000.0, 1.0, "periodic_plot")
 map(ϕas, ϕps) do ϕa, ϕp
     param = new_param(DT, v0, DR, N, Δx, Lx, Ly, ϕa, ϕp, δt, δ; T = T, name = param_name, save_interval = save_interval, save_on = true)
     push!(params,param)
