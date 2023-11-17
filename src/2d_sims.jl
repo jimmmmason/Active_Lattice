@@ -212,6 +212,14 @@ using StatsBase, DrWatson, Random
         pathname = "/store/DAMTP/jm2386/Active_Lattice/plots/vids/2d_sims_vids/$(name)/[DT,v0,DR,N,Lx,Ly,ϕa,ϕp]=$([DT,v0,DR,N,Lx,Ly,ϕa,ϕp])"
         return filename, pathname
     end
+
+    function sim_vid_smooth_save_name(param::Dict{String, Any},t::Float64)
+        @unpack DT, v0, DR, N, Lx, Ly, ϕa, ϕp, name, save_interval = param
+        s = round(t ; digits = Int64( -log10(save_interval) ÷ 1 ))
+        filename = "/store/DAMTP/jm2386/Active_Lattice/plots/vids/2d_sims_vids_smooth/$(name)/[DT,v0,DR,N,Lx,Ly,ϕa,ϕp]=$([DT,v0,DR,N,Lx,Ly,ϕa,ϕp])/t=$(s).mp4"
+        pathname = "/store/DAMTP/jm2386/Active_Lattice/plots/vids/2d_sims_vids_smooth/$(name)/[DT,v0,DR,N,Lx,Ly,ϕa,ϕp]=$([DT,v0,DR,N,Lx,Ly,ϕa,ϕp])"
+        return filename, pathname
+    end
 #
 
 ## simulation functions 

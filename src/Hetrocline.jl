@@ -260,6 +260,36 @@ function return_spin(;Pe = Pe, Δϕ = Δϕ)
     return ϕas_left, ϕas_right, ϕps
 end
 
+function return_spin_from_grid(;max_ϕa = 1.0, Pe = Pe, γ_grid = 0.1:0.1:1, ϕ1_grid = [],ϕ2_grid = [], ϕp_grid = 0.1:0.1:1)
+    ϕps = []
+    ϕas_left = []
+    ϕas_right = []
+    γs = []
+    ϕ1s = []
+    ϕ2s = []
+    for (ϕp, γ, ϕ1, ϕ2) in zip(ϕp_grid,γ_grid, ϕ1_grid, ϕ2_grid)
+        f(x) = is_stable_value(x, ϕp; Pe = Pe)
+        try
+            ϕal, ϕar = find_zeros(f,(0,1-ϕp-1e-8))
+            push!(ϕas_left, ϕal)
+            push!(ϕas_right, ϕar)
+            push!(ϕps, ϕp)
+            push!(γs, γ)
+            push!(ϕ1s, ϕ1)
+            push!(ϕ2s, ϕ2)
+        catch
+ 
+            push!(ϕas_left, max_ϕa)
+            push!(ϕas_right, max_ϕa)
+            push!(ϕps, ϕp)
+            push!(γs, γ)
+            push!(ϕ1s, ϕ1)
+            push!(ϕ2s, ϕ2)
+        end
+    end
+    return ϕas_left, ϕas_right, ϕps, γs, ϕ1s, ϕ2s
+end
+
 #
 
 function return_complex_boundary_pt(ϕa; Pe = 10.)

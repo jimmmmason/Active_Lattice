@@ -2,13 +2,13 @@ cd("/home/jm2386/Active_Lattice/")
 using DrWatson
 @quickactivate "Active_Lattice"
 
-using DrWatson, KernelDensity, Peaks
+using DrWatson, KernelDensity, Peaks, LaTeXStrings
 
 ## running simulation 
     function _2d_new_param(DT::Float64, v0::Float64, DR::Float64, N::Int64, Nθ::Int64, Δx::Float64, Lx::Float64, Ly::Float64, ϕa::Float64, ϕp::Float64, δt::Float64, δ::Float64; T::Float64 = 0.001, Δt::Float64 = 0.01, name::String = "test", save_interval::Float64 = 0.001, save_on::Bool = false)
         Dθ  = DR
         D   = DT/Lx^2
-        λ  = v0/Lx
+        λ   = v0/Lx
         N₁  = Int64(Lx*N ÷ 1)
         N₂  = Int64(Lx*N ÷ 1)
         Nx  = Int64((Lx/Δx) ÷ 1)
@@ -64,7 +64,7 @@ using DrWatson, KernelDensity, Peaks
                 scale = N,
             )
         ax.errorbar(passive[1,:],passive[2,:], 
-            markersize = 400/N, 
+            markersize = 40/N, 
             fmt= "o", 
             color = "black",
             alpha=0.8,
@@ -134,13 +134,13 @@ using DrWatson, KernelDensity, Peaks
             ax.set_ylabel(L"y",fontsize = 15)
         #grid points
             x = dx:dx:Lx
-            y = dx:dx:Lx
+            y = Lx:-dx:dx
             xx = [x̃ for x̃ ∈ x, ỹ ∈ y]'
             yy = [ỹ for x̃ ∈ x, ỹ ∈ y]'
         #plot data
             colmap = PyPlot.plt.cm.viridis
             norm1 = matplotlib.colors.Normalize(vmin=cmin, vmax= cmax);
-            im1 = ax.streamplot(xx, yy, m[1,:,:]', m[2,:,:]', color = absmag', cmap = colmap, norm = norm1, density = density)#2.5
+            im1 = ax.streamplot(xx, yy, m[:,:], m[2,:,:], color = absmag', cmap = colmap, norm = norm1, density = density)#2.5
             
             if cbar
                 fig.colorbar(im1.lines, cax = cbar_ax)
@@ -201,13 +201,13 @@ using DrWatson, KernelDensity, Peaks
             ax.set_ylabel(L"y",fontsize = 15)
         #grid points
             x = dx:dx:Lx
-            y = dx:dx:Lx
+            y = Lx:-dx:dx
             xx = [x̃ for x̃ ∈ x, ỹ ∈ y]'
             yy = [ỹ for x̃ ∈ x, ỹ ∈ y]'
         #plot data
             colmap = PyPlot.plt.cm.viridis
             norm1 = matplotlib.colors.Normalize(vmin=cmin, vmax= cmax);
-            im1 = ax.streamplot(xx, yy, m[1,:,:]', m[2,:,:]', color = absmag', cmap = colmap, norm = norm1, density = density)#2.5
+            im1 = ax.streamplot(xx, yy, m[2,:,:], -m[1,:,:], color = absmag', cmap = colmap, norm = norm1, density = density)#2.5
             
             if cbar
                 fig.colorbar(im1.lines, cax = cbar_ax)
@@ -219,4 +219,4 @@ using DrWatson, KernelDensity, Peaks
 #
 
 
-println("v2.1")
+println("v2.2")
