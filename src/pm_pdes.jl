@@ -285,16 +285,20 @@ using TensorOperations, LinearAlgebra
     end
 
     function perturb_pde!(f::Matrix{Float64}, param::Dict{String, Any})
-        @unpack DT, v0, DR, Δx, Lx, ϕa, ϕp, T , name, Nx, save_interval, save_on, δt, δ = param
-    
-        ω, value, vector = lin_pert_values(param)
+        @unpack DT, v0, DR, Δx, Lx, ϕa, ϕp, T , name, Nx, save_interval, save_on, δt, δ, pert = param
+        
+        if pert == "rand"
+            pertf = 2*rand(Nx,3) .-1
+        else
+            ω, value, vector = lin_pert_values(param)
 
-        wave::Vector{ComplexF64}   = exp.((1:Nx)*(im*2*π/Nx))
-        pertf::Matrix{Float64}     = zeros(Nx,3)
+            wave::Vector{ComplexF64}   = exp.((1:Nx)*(im*2*π/Nx))
+            pertf::Matrix{Float64}     = zeros(Nx,3)
 
-        pertf[:,1] = real.( wave*(vector[1]- vector[2])/2 )
-        pertf[:,2] = real.( wave*(vector[1]+ vector[2])/2 ) 
-        pertf[:,3] = real.( wave*(vector[3]) )
+            pertf[:,1] = real.( wave*(vector[1]- vector[2])/2 )
+            pertf[:,2] = real.( wave*(vector[1]+ vector[2])/2 ) 
+            pertf[:,3] = real.( wave*(vector[3]) )
+        end
 
         c = norm(pertf)/sqrt(Nx)
         f += δ*pertf/c
@@ -400,6 +404,90 @@ using TensorOperations, LinearAlgebra
         else
             println("all loading failed; running new pde")
             t, f = run_new_pde(param)
+        end
+        return t, f
+    end
+
+    function run_and_pert_pde(param::Dict{String, Any})
+        @unpack DT, v0, DR, Δx, Lx, ϕa, ϕp, T , name, Nx, save_interval, save_on, δt = param
+        # configuration
+        f::Matrix{Float64} = initiate_uniform_pde(ϕa, ϕp, Nx);
+        f = perturb_pde!(f, param);
+        t::Float64 = 0.;
+        s::Float64 = save_interval
+
+        #inital save
+        if save_on
+            filename::String        = pde_save_name(param,t)
+            data::Dict{String, Any} = Dict("f" => f, "t" => t)
+            safesave(filename,data)
+        end
+        
+        pert_count = 1
+        δ = 0.01
+        pert = "rand"
+        @pack! param = δ, pert
+        while t < T
+            while t < s
+                t, f = time_step!(t, f; δt=δt, Nx=Nx, Lx=Lx, DT=DT, v0=v0, DR=DR);
+            end
+            if pert_count > 100
+                f = perturb_pde!(f, param)
+                pert_count = 1
+            else
+                pert_count += 1
+            end
+            #save snapshot
+            if save_on
+                filename    = pde_save_name(param,t)
+                data        = Dict("f" => f, "t" => t)
+                safesave(filename,data)
+            end
+            s += save_interval
+        end
+        return t, f
+    end
+
+    function force_load_and_pert_pde(param::Dict{String, Any})
+        @unpack DT, v0, DR, Δx, Lx, ϕa, ϕp, T , name, Nx, save_interval, save_on, δt = param
+        # configuration
+        f::Matrix{Float64} = initiate_uniform_pde(ϕa, ϕp, Nx);
+        t::Float64 = 0.;
+        s::Float64 = save_interval;
+        loaded::Bool = false
+    
+        try
+            t, f = load_pde(param,0.0)
+            loaded = true
+        catch
+            loaded = false
+        end
+        
+        pert_count = 1
+        δ = 0.01
+        pert = "rand"
+        @pack! param = δ, pert
+        if loaded
+            while t < T
+                while t < s
+                    t, f = time_step!(t, f; δt=δt, Nx=Nx, Lx=Lx, DT=DT, v0=v0, DR=DR);
+                end
+                if pert_count > 100
+                    f = perturb_pde!(f, param)
+                    pert_count = 1
+                else
+                    pert_count += 1
+                end
+                #save snapshot
+                if save_on
+                    filename    = pde_save_name(param,t)
+                    data        = Dict("f" => f, "t" => t)
+                    safesave(filename,data)
+                end
+                s += save_interval
+            end
+        else
+            println("all loading failed; abort")
         end
         return t, f
     end

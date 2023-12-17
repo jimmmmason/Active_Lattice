@@ -4,12 +4,12 @@ using DrWatson
 
 using DrWatson, KernelDensity, Peaks
 
-## running simulation 
-    function new_param(DT::Float64, v0::Float64, DR::Float64, N::Int64, Δx::Float64, Lx::Float64, Ly::Float64, ϕa::Float64, ϕp::Float64, δt::Float64, δ::Float64; T::Float64 = 0.001, name::String = "test", save_interval::Float64 = 0.001, save_on::Bool = false)
+## running simulation
+    function new_param(DT::Float64, v0::Float64, DR::Float64, N::Int64, Δx::Float64, Lx::Float64, Ly::Float64, ϕa::Float64, ϕp::Float64, δt::Float64, δ::Float64; T::Float64 = 0.001, name::String = "test", pert::String = "lin", save_interval::Float64 = 0.001, save_on::Bool = false)
         param::Dict{String, Any} = Dict{String,Any}()
         N₁::Int64,N₂::Int64 = Int64(Lx*N ÷ 1), Int64(Ly*N ÷ 1)
         Nx::Int64 = Int64(Lx/Δx ÷ 1)
-        @pack! param = DT, v0, DR, N, Δx, Lx, Ly, ϕa, ϕp, δt, δ, T, name, Nx, N₁, N₂, save_interval, save_on
+        @pack! param = DT, v0, DR, N, Δx, Lx, Ly, ϕa, ϕp, δt, δ, T, name, Nx, N₁, N₂, save_interval, save_on, pert
         return param
     end
 #

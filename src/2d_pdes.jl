@@ -402,13 +402,18 @@ using TensorOperations, LinearAlgebra, Distributions
                 pertf[:,:,1] = zeros(Nx,Nx)
             end
         else
-            value, vector = lin_pert_values(param)
+            k = 20
+            value, vector = lin_pert_values(param; k = k)
             
-            wave::Vector{ComplexF64}   = exp.((1:Nx)*(im*2*π/Nx))
+            wave::Vector{ComplexF64}   = exp.((1:Nx)*(-im*2*π/Nx))
 
             K = collect(0:1:(k-1))
-            for x in 1:Nx, θ in 1:Nθ
-                pertf[:,x,θ+1] = real.( dot(vector,cos.(θ*K*(2*π/Nθ)))*wave )
+
+            for x in 1:Nx, y in 1:Nx
+                pertf[x,y, 1] = real(vector[1]*wave[x])
+                for θ in 1:Nθ
+                    pertf[x,y,θ+1] = real( dot(vector[2:end],cos.(θ*K*(2*π/Nθ)))*wave[x] )
+                end
             end
         end
 
@@ -422,10 +427,10 @@ using TensorOperations, LinearAlgebra, Distributions
 ## solving functions 
 
     function run_new_pde(param::Dict{String, Any})
-        @unpack DT, v0, DR, Δx, Lx, ϕa, ϕp, T , name, Nx, Nθ, save_interval, save_on, δt = param
+        @unpack DT, v0, DR, Δx, Lx, ϕa, ϕp, T , name, Nx, Nθ, save_interval, save_on, δt, pert = param
         # configuration
         f::Array{Float64,3} = initiate_uniform_pde(ϕa, ϕp, Nx, Nθ);
-        f = perturb_pde!(f, param);
+        f = perturb_pde!(f, param; type = pert);
         t::Float64 = 0.;
         s::Float64 = save_interval
 

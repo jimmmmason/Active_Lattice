@@ -5,7 +5,7 @@ using DrWatson
 using DrWatson, KernelDensity, Peaks, LaTeXStrings
 
 ## running simulation 
-    function _2d_new_param(DT::Float64, v0::Float64, DR::Float64, N::Int64, Nθ::Int64, Δx::Float64, Lx::Float64, Ly::Float64, ϕa::Float64, ϕp::Float64, δt::Float64, δ::Float64; T::Float64 = 0.001, Δt::Float64 = 0.01, name::String = "test", save_interval::Float64 = 0.001, save_on::Bool = false)
+    function _2d_new_param(DT::Float64, v0::Float64, DR::Float64, N::Int64, Nθ::Int64, Δx::Float64, Lx::Float64, Ly::Float64, ϕa::Float64, ϕp::Float64, δt::Float64, δ::Float64; T::Float64 = 0.001, Δt::Float64 = 0.01, name::String = "test", pert::String = "test",save_interval::Float64 = 0.001, save_on::Bool = false)
         Dθ  = DR
         D   = DT/Lx^2
         λ   = v0/Lx
@@ -13,7 +13,7 @@ using DrWatson, KernelDensity, Peaks, LaTeXStrings
         N₂  = Int64(Lx*N ÷ 1)
         Nx  = Int64((Lx/Δx) ÷ 1)
         param = uniform_initial_param(; name = name, D =D , λ =λ ,ρa = ϕa, ρp = ϕp, L=N₁, Δt = Δt, Dθ = Dθ, T=T)
-        @pack! param = DT, v0, DR, N, Nθ, Δx, Lx, Ly, ϕa, ϕp, δt, δ, T, name, Nx, N₁, N₂, save_interval, save_on
+        @pack! param = DT, v0, DR, N, Nθ, Δx, Lx, Ly, ϕa, ϕp, δt, δ, T, name, Nx, N₁, N₂, save_interval, save_on, pert
         return param
     end
 #
@@ -140,7 +140,7 @@ using DrWatson, KernelDensity, Peaks, LaTeXStrings
         #plot data
             colmap = PyPlot.plt.cm.viridis
             norm1 = matplotlib.colors.Normalize(vmin=cmin, vmax= cmax);
-            im1 = ax.streamplot(xx, yy, m[:,:], m[2,:,:], color = absmag', cmap = colmap, norm = norm1, density = density)#2.5
+            im1 = ax.streamplot(xx, yy, m[1,:,:]', m[2,:,:]', color = absmag', cmap = colmap, norm = norm1, density = density)#2.5
             
             if cbar
                 fig.colorbar(im1.lines, cax = cbar_ax)
