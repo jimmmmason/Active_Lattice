@@ -9,36 +9,53 @@ using DrWatson
 
 ###
 # Define functions 
-using QuadGK
+using QuadGK,ForwardDiff
 
 rtol = 1e-14
 tol = 1e-14
 
 R_prime(ρ) = 1/self_diff(ρ)/(1-ρ)^3
 
-function R(ρ; rtol=rtol, tol = tol)
+function R(ρ::Float64; rtol=rtol, tol = tol)
     α::Float64= π/2 -1;
     c::Float64 =  -1/(α*(2*α-1)/(2*α+1) - α +1);
     f(x) = R_prime(x) - c/(1-x)^4;
-    return quadgk(f, 0.0, ρ, rtol=rtol, atol = tol)[1] + c/3/(1-ρ)^3 - c/3
+    return quadgk(f, 0.0, ρ; rtol=rtol, atol = tol)[1] + c/3/(1-ρ)^3 - c/3
 end
+
+function R(x::ForwardDiff.Dual{T,V,N}; rtol=rtol, tol = tol) where {T,V,N}
+    return ForwardDiff.Dual{T}(R(x.value; rtol=rtol, tol = tol), R_prime(x.value)*ForwardDiff.partials(x))
+end
+
 
 κ(ρ,Pe) = self_diff(ρ) / Pe / (1 - ρ)
 Λ(ρ,Pe) = -2 * self_diff(ρ) / Pe / (1 - ρ)^2
-g0(ρ;Pe = 10, γ = 1, atol = 1e-10 ) = Pe*( 1-γ*(1- ρ) )*self_diff(ρ) - 2*log(1 - ρ)/Pe
+g0(ρ;Pe = 10, γ = 1, atol = 1 ) = Pe*( 1-γ*(1- ρ) )*self_diff(ρ) - 2*log(1 - ρ)/Pe
 dg0(ρ;Pe = 10, γ = 1 ) = Pe*(γ )*self_diff(ρ) +Pe*( 1-γ*(1- ρ) )*self_diff_prime(ρ) + 2/(1 - ρ)/Pe
+
+
+g0(x::ForwardDiff.Dual{T,V,N};Pe = 10, γ::ForwardDiff.Dual{T,V,N} = 1, atol = 1 ) where {T,V,N} = ForwardDiff.Dual{T}( g0(x.value;Pe = Pe, γ = γ), dg0(x.value;Pe = Pe, γ = γ)*ForwardDiff.partials(x) )
+
 
 dΦ_dρ(ρ,Pe,γ) = g0(ρ;Pe = Pe,γ = γ)*R_prime(ρ)
 
-function ΦoR(x; Pe = 10, γ = 3.4,rtol=rtol, tol = tol) # Φ as a funciton of ρ ie composed with R
+function ΦoR(x::Float64; Pe = 10, γ = 3.4,rtol=rtol, tol = tol) # Φ as a funciton of ρ ie composed with R
     α::Float64= π/2 -1;
     c::Float64 =  2/Pe/(α*(2*α-1)/(2*α+1) - α +1);
     f(x) = dΦ_dρ(x,Pe,γ) - c*log(1 - x)/(1-x)^4;
     return quadgk(f, 0.0, x, rtol=rtol, atol = tol)[1]+c*(1+3*log(1-x))/9/(1-x)^3-c*(1+3*log(1-0.95))/9/(1-0.95)^3
 end
 
-function h0(ρ;Pe = 10,γ = 1, atol = 1e-12)
-    return g0(ρ;Pe = Pe,γ = γ)*R(ρ; tol = atol)-ΦoR(ρ;Pe = Pe,γ = γ, tol = atol)
+function ΦoR(x::ForwardDiff.Dual{T,V,N}; Pe = 10, γ = 3.4,rtol=rtol, tol = tol) where {T,V,N} # Φ as a funciton of ρ ie composed with R
+    return return ForwardDiff.Dual{T}(ΦoR(x.value), dΦ_dρ(x.value,Pe,γ)*ForwardDiff.partials(x))
+end
+
+function h0(x::ForwardDiff.Dual{T,V,N};Pe = 10,γ = 1, atol = 1e-12) where {T,V,N}
+    return ForwardDiff.Dual{T}(g0(x.value;Pe = Pe,γ = γ)*R.(x.value; tol = atol)-ΦoR.(x.value;Pe = Pe,γ = γ, tol = atol), ( dg0(x.value;Pe = Pe,γ = γ)*R.(x.value; tol = atol) )*ForwardDiff.partials(x))
+end
+
+function h0(ρ::Float64;Pe = 10,γ = 1, atol = 1e-12) where {T,V,N}
+    return g0(ρ;Pe = Pe,γ = γ)*R.(ρ; tol = atol)-ΦoR.(ρ;Pe = Pe,γ = γ, tol = atol)
 end
 
 #### 
@@ -156,9 +173,20 @@ function dg0_minimum(;Pe = 5., γ = 1., initial_Δ = 1e-4)
     return minimum(DG)
 end
 
-function find_gamma_limit(;Pe = 5., initial_Δ = 1e-4, γ_max = 100.)
+function dg0_argmin(;Pe = 5., γ = 1., initial_Δ = 1e-4)
+    x = 0.:(initial_Δ):(1-initial_Δ)
+    DG = dg0.(x; Pe = Pe, γ= γ)
+    return argmin(DG)*initial_Δ
+end
+
+function find_gamma_limit(;Pe = 5., initial_Δ = 1e-5, γ_max = 100.)
     f(x) = dg0_minimum(;Pe = Pe, γ = x, initial_Δ = initial_Δ)
     return find_zero(f, (1., γ_max))
+end
+
+function find_rho_limit(;Pe = 5., initial_Δ = 1e-5, γ_max = 100.)
+    γ = find_gamma_limit(;Pe = Pe, initial_Δ = initial_Δ, γ_max = γ_max)
+    return dg0_argmin(;Pe = Pe, γ = γ, initial_Δ = initial_Δ)
 end
 
 ###
@@ -219,23 +247,387 @@ function is_complex_value(ϕa, ϕp; Pe = 10.)
     return -(expr2^2 - 4*ϕp*β(ϕa, ϕp)*ds^2*Pe^2)
 end
 
-function is_stable_value(ϕa, ϕp; Pe = 10.)
-    ϕ  = ϕa + ϕp
-    ϕ0 = 1- ϕ
-    ds = self_diff(ϕ)
-    dsp = self_diff_prime(ϕ)
-    expr1 = (β(ϕa, ϕp) - α(ϕa, ϕp)*Pe^2)
-    expr2 = (β(ϕa, ϕp) + α(ϕa, ϕp)*Pe^2)
-    return expr1 -4*ϕ + abs(real( sqrt(expr2^2 - 4*ϕp*β(ϕa, ϕp)*ds^2*Pe^2 +0*im)))
+using WolframExpr
+# WolframExpr expressions
+    u1dw_str = "(-6*(2*p^2*w + 4*ds*p^2*w)*(2*p^2 + p^2*w^2 + 2*ds*p^2*w^2)^2 + 9*(2*p^2 + p^2*w^2 + 2*ds*p^2*w^2)*
+    (4*p^4*w + 4*ds*p^4*w + 2*ds^2*p^4*Pe^2*w + 2*ds*p^3*pa*Pe^2*w - 2*ds^2*p^3*pa*Pe^2*w + 
+    2*dds*p^4*pa*Pe^2*w - 2*ds*p^4*pa*Pe^2*w - 2*dds*p^5*pa*Pe^2*w + 8*ds*p^4*w^3 + 4*ds^2*p^4*w^3) + 
+    9*(2*p^2*w + 4*ds*p^2*w)*(2*p^4*w^2 + 2*ds*p^4*w^2 + ds^2*p^4*Pe^2*w^2 + ds*p^3*pa*Pe^2*w^2 - 
+    ds^2*p^3*pa*Pe^2*w^2 + dds*p^4*pa*Pe^2*w^2 - ds*p^4*pa*Pe^2*w^2 - dds*p^5*pa*Pe^2*w^2 + 
+    2*ds*p^4*w^4 + ds^2*p^4*w^4) - 27*(8*ds*p^6*w^3 + 4*ds^2*p^6*Pe^2*w^3 + 4*dds*ds*p^6*pa*Pe^2*w^3 - 
+    4*ds^2*p^6*pa*Pe^2*w^3 - 4*dds*ds*p^7*pa*Pe^2*w^3 + 6*ds^2*p^6*w^5))/54 + 
+    ((p^9*(2*(-2*(-1 + ds)*p + 3*(ds^2*p - (ds^2 + ds*(-1 + p) + dds*(-1 + p)*p)*pa)*Pe^2)*w - 
+    4*(-1 + ds)^2*p*w^3)*
+    (-4*p + (-2*(-1 + ds)*p + 3*(ds^2*p - (ds^2 + ds*(-1 + p) + dds*(-1 + p)*p)*pa)*Pe^2)*w^2 - 
+    (-1 + ds)^2*p*w^4)^2)/243 + ((6*(2*p^2*w + 4*ds*p^2*w)*(2*p^2 + p^2*w^2 + 2*ds*p^2*w^2)^2 - 
+    9*(2*p^2 + p^2*w^2 + 2*ds*p^2*w^2)*(4*p^4*w + 4*ds*p^4*w + 2*ds^2*p^4*Pe^2*w + 
+        2*ds*p^3*pa*Pe^2*w - 2*ds^2*p^3*pa*Pe^2*w + 2*dds*p^4*pa*Pe^2*w - 2*ds*p^4*pa*Pe^2*w - 
+        2*dds*p^5*pa*Pe^2*w + 8*ds*p^4*w^3 + 4*ds^2*p^4*w^3) - 9*(2*p^2*w + 4*ds*p^2*w)*
+    (2*p^4*w^2 + 2*ds*p^4*w^2 + ds^2*p^4*Pe^2*w^2 + ds*p^3*pa*Pe^2*w^2 - ds^2*p^3*pa*Pe^2*w^2 + 
+        dds*p^4*pa*Pe^2*w^2 - ds*p^4*pa*Pe^2*w^2 - dds*p^5*pa*Pe^2*w^2 + 2*ds*p^4*w^4 + ds^2*p^4*w^4) + 
+    27*(8*ds*p^6*w^3 + 4*ds^2*p^6*Pe^2*w^3 + 4*dds*ds*p^6*pa*Pe^2*w^3 - 4*ds^2*p^6*pa*Pe^2*w^3 - 
+        4*dds*ds*p^7*pa*Pe^2*w^3 + 6*ds^2*p^6*w^5))*(2*(2*p^2 + p^2*w^2 + 2*ds*p^2*w^2)^3 - 
+    9*(2*p^2 + p^2*w^2 + 2*ds*p^2*w^2)*(2*p^4*w^2 + 2*ds*p^4*w^2 + ds^2*p^4*Pe^2*w^2 + 
+        ds*p^3*pa*Pe^2*w^2 - ds^2*p^3*pa*Pe^2*w^2 + dds*p^4*pa*Pe^2*w^2 - ds*p^4*pa*Pe^2*w^2 - 
+        dds*p^5*pa*Pe^2*w^2 + 2*ds*p^4*w^4 + ds^2*p^4*w^4) + 
+    27*(2*ds*p^6*w^4 + ds^2*p^6*Pe^2*w^4 + dds*ds*p^6*pa*Pe^2*w^4 - ds^2*p^6*pa*Pe^2*w^4 - 
+        dds*ds*p^7*pa*Pe^2*w^4 + ds^2*p^6*w^6)))/1458)/
+    (2*Sqrt[(p^9*(-4*p + (-2*(-1 + ds)*p + 3*(ds^2*p - (ds^2 + ds*(-1 + p) + dds*(-1 + p)*p)*pa)*Pe^2)*
+        w^2 - (-1 + ds)^2*p*w^4)^3)/729 + 
+    (2*(2*p^2 + p^2*w^2 + 2*ds*p^2*w^2)^3 - 9*(2*p^2 + p^2*w^2 + 2*ds*p^2*w^2)*
+        (2*p^4*w^2 + 2*ds*p^4*w^2 + ds^2*p^4*Pe^2*w^2 + ds*p^3*pa*Pe^2*w^2 - ds^2*p^3*pa*Pe^2*w^2 + 
+        dds*p^4*pa*Pe^2*w^2 - ds*p^4*pa*Pe^2*w^2 - dds*p^5*pa*Pe^2*w^2 + 2*ds*p^4*w^4 + 
+        ds^2*p^4*w^4) + 27*(2*ds*p^6*w^4 + ds^2*p^6*Pe^2*w^4 + dds*ds*p^6*pa*Pe^2*w^4 - 
+        ds^2*p^6*pa*Pe^2*w^4 - dds*ds*p^7*pa*Pe^2*w^4 + ds^2*p^6*w^6))^2/2916])"
+    u1dw = string_to_function(u1dw_str, [:p, :pa, :Pe, :w, :ds, :dds]); 
+
+    u2dw_str = "(-6*(2*p^2*w + 4*ds*p^2*w)*(2*p^2 + p^2*w^2 + 2*ds*p^2*w^2)^2 + 9*(2*p^2 + p^2*w^2 + 2*ds*p^2*w^2)*
+    (4*p^4*w + 4*ds*p^4*w + 2*ds^2*p^4*Pe^2*w + 2*ds*p^3*pa*Pe^2*w - 2*ds^2*p^3*pa*Pe^2*w + 
+    2*dds*p^4*pa*Pe^2*w - 2*ds*p^4*pa*Pe^2*w - 2*dds*p^5*pa*Pe^2*w + 8*ds*p^4*w^3 + 4*ds^2*p^4*w^3) + 
+    9*(2*p^2*w + 4*ds*p^2*w)*(2*p^4*w^2 + 2*ds*p^4*w^2 + ds^2*p^4*Pe^2*w^2 + ds*p^3*pa*Pe^2*w^2 - 
+    ds^2*p^3*pa*Pe^2*w^2 + dds*p^4*pa*Pe^2*w^2 - ds*p^4*pa*Pe^2*w^2 - dds*p^5*pa*Pe^2*w^2 + 
+    2*ds*p^4*w^4 + ds^2*p^4*w^4) - 27*(8*ds*p^6*w^3 + 4*ds^2*p^6*Pe^2*w^3 + 4*dds*ds*p^6*pa*Pe^2*w^3 - 
+    4*ds^2*p^6*pa*Pe^2*w^3 - 4*dds*ds*p^7*pa*Pe^2*w^3 + 6*ds^2*p^6*w^5))/54 - 
+    ((p^9*(2*(-2*(-1 + ds)*p + 3*(ds^2*p - (ds^2 + ds*(-1 + p) + dds*(-1 + p)*p)*pa)*Pe^2)*w - 
+    4*(-1 + ds)^2*p*w^3)*
+    (-4*p + (-2*(-1 + ds)*p + 3*(ds^2*p - (ds^2 + ds*(-1 + p) + dds*(-1 + p)*p)*pa)*Pe^2)*w^2 - 
+    (-1 + ds)^2*p*w^4)^2)/243 + ((6*(2*p^2*w + 4*ds*p^2*w)*(2*p^2 + p^2*w^2 + 2*ds*p^2*w^2)^2 - 
+    9*(2*p^2 + p^2*w^2 + 2*ds*p^2*w^2)*(4*p^4*w + 4*ds*p^4*w + 2*ds^2*p^4*Pe^2*w + 
+        2*ds*p^3*pa*Pe^2*w - 2*ds^2*p^3*pa*Pe^2*w + 2*dds*p^4*pa*Pe^2*w - 2*ds*p^4*pa*Pe^2*w - 
+        2*dds*p^5*pa*Pe^2*w + 8*ds*p^4*w^3 + 4*ds^2*p^4*w^3) - 9*(2*p^2*w + 4*ds*p^2*w)*
+    (2*p^4*w^2 + 2*ds*p^4*w^2 + ds^2*p^4*Pe^2*w^2 + ds*p^3*pa*Pe^2*w^2 - ds^2*p^3*pa*Pe^2*w^2 + 
+        dds*p^4*pa*Pe^2*w^2 - ds*p^4*pa*Pe^2*w^2 - dds*p^5*pa*Pe^2*w^2 + 2*ds*p^4*w^4 + ds^2*p^4*w^4) + 
+    27*(8*ds*p^6*w^3 + 4*ds^2*p^6*Pe^2*w^3 + 4*dds*ds*p^6*pa*Pe^2*w^3 - 4*ds^2*p^6*pa*Pe^2*w^3 - 
+        4*dds*ds*p^7*pa*Pe^2*w^3 + 6*ds^2*p^6*w^5))*(2*(2*p^2 + p^2*w^2 + 2*ds*p^2*w^2)^3 - 
+    9*(2*p^2 + p^2*w^2 + 2*ds*p^2*w^2)*(2*p^4*w^2 + 2*ds*p^4*w^2 + ds^2*p^4*Pe^2*w^2 + 
+        ds*p^3*pa*Pe^2*w^2 - ds^2*p^3*pa*Pe^2*w^2 + dds*p^4*pa*Pe^2*w^2 - ds*p^4*pa*Pe^2*w^2 - 
+        dds*p^5*pa*Pe^2*w^2 + 2*ds*p^4*w^4 + ds^2*p^4*w^4) + 
+    27*(2*ds*p^6*w^4 + ds^2*p^6*Pe^2*w^4 + dds*ds*p^6*pa*Pe^2*w^4 - ds^2*p^6*pa*Pe^2*w^4 - 
+        dds*ds*p^7*pa*Pe^2*w^4 + ds^2*p^6*w^6)))/1458)/
+    (2*Sqrt[(p^9*(-4*p + (-2*(-1 + ds)*p + 3*(ds^2*p - (ds^2 + ds*(-1 + p) + dds*(-1 + p)*p)*pa)*Pe^2)*
+        w^2 - (-1 + ds)^2*p*w^4)^3)/729 + 
+    (2*(2*p^2 + p^2*w^2 + 2*ds*p^2*w^2)^3 - 9*(2*p^2 + p^2*w^2 + 2*ds*p^2*w^2)*
+        (2*p^4*w^2 + 2*ds*p^4*w^2 + ds^2*p^4*Pe^2*w^2 + ds*p^3*pa*Pe^2*w^2 - ds^2*p^3*pa*Pe^2*w^2 + 
+        dds*p^4*pa*Pe^2*w^2 - ds*p^4*pa*Pe^2*w^2 - dds*p^5*pa*Pe^2*w^2 + 2*ds*p^4*w^4 + 
+        ds^2*p^4*w^4) + 27*(2*ds*p^6*w^4 + ds^2*p^6*Pe^2*w^4 + dds*ds*p^6*pa*Pe^2*w^4 - 
+        ds^2*p^6*pa*Pe^2*w^4 - dds*ds*p^7*pa*Pe^2*w^4 + ds^2*p^6*w^6))^2/2916])"
+    u2dw = string_to_function(u2dw_str, [:p, :pa, :Pe, :w, :ds, :dds]); 
+
+    shiftdw_str = "(-2*p^2*w - 4*ds*p^2*w)/3"
+    shiftdw = string_to_function(shiftdw_str, [:p, :pa, :Pe, :w, :ds, :dds]); 
+
+    u1_str = "(-2*(2*p^2 + p^2*w^2 + 2*ds*p^2*w^2)^3 + 9*(2*p^2 + p^2*w^2 + 2*ds*p^2*w^2)*
+    (2*p^4*w^2 + 2*ds*p^4*w^2 + ds^2*p^4*Pe^2*w^2 + ds*p^3*pa*Pe^2*w^2 - ds^2*p^3*pa*Pe^2*w^2 + 
+    dds*p^4*pa*Pe^2*w^2 - ds*p^4*pa*Pe^2*w^2 - dds*p^5*pa*Pe^2*w^2 + 2*ds*p^4*w^4 + ds^2*p^4*w^4) - 
+    27*(2*ds*p^6*w^4 + ds^2*p^6*Pe^2*w^4 + dds*ds*p^6*pa*Pe^2*w^4 - ds^2*p^6*pa*Pe^2*w^4 - 
+    dds*ds*p^7*pa*Pe^2*w^4 + ds^2*p^6*w^6))/54 + 
+    Sqrt[(p^9*(-4*p + (-2*(-1 + ds)*p + 3*(ds^2*p - (ds^2 + ds*(-1 + p) + dds*(-1 + p)*p)*pa)*Pe^2)*w^2 - 
+    (-1 + ds)^2*p*w^4)^3)/729 + 
+    (2*(2*p^2 + p^2*w^2 + 2*ds*p^2*w^2)^3 - 9*(2*p^2 + p^2*w^2 + 2*ds*p^2*w^2)*
+    (2*p^4*w^2 + 2*ds*p^4*w^2 + ds^2*p^4*Pe^2*w^2 + ds*p^3*pa*Pe^2*w^2 - ds^2*p^3*pa*Pe^2*w^2 + 
+        dds*p^4*pa*Pe^2*w^2 - ds*p^4*pa*Pe^2*w^2 - dds*p^5*pa*Pe^2*w^2 + 2*ds*p^4*w^4 + ds^2*p^4*w^4) + 
+    27*(2*ds*p^6*w^4 + ds^2*p^6*Pe^2*w^4 + dds*ds*p^6*pa*Pe^2*w^4 - ds^2*p^6*pa*Pe^2*w^4 - 
+        dds*ds*p^7*pa*Pe^2*w^4 + ds^2*p^6*w^6))^2/2916]"
+    u1 = string_to_function(u1_str, [:p, :pa, :Pe, :w, :ds, :dds]); 
+
+    u2_str = "(-2*(2*p^2 + p^2*w^2 + 2*ds*p^2*w^2)^3 + 9*(2*p^2 + p^2*w^2 + 2*ds*p^2*w^2)*
+    (2*p^4*w^2 + 2*ds*p^4*w^2 + ds^2*p^4*Pe^2*w^2 + ds*p^3*pa*Pe^2*w^2 - ds^2*p^3*pa*Pe^2*w^2 + 
+    dds*p^4*pa*Pe^2*w^2 - ds*p^4*pa*Pe^2*w^2 - dds*p^5*pa*Pe^2*w^2 + 2*ds*p^4*w^4 + ds^2*p^4*w^4) - 
+    27*(2*ds*p^6*w^4 + ds^2*p^6*Pe^2*w^4 + dds*ds*p^6*pa*Pe^2*w^4 - ds^2*p^6*pa*Pe^2*w^4 - 
+    dds*ds*p^7*pa*Pe^2*w^4 + ds^2*p^6*w^6))/54 - 
+    Sqrt[(p^9*(-4*p + (-2*(-1 + ds)*p + 3*(ds^2*p - (ds^2 + ds*(-1 + p) + dds*(-1 + p)*p)*pa)*Pe^2)*w^2 - 
+    (-1 + ds)^2*p*w^4)^3)/729 + 
+    (2*(2*p^2 + p^2*w^2 + 2*ds*p^2*w^2)^3 - 9*(2*p^2 + p^2*w^2 + 2*ds*p^2*w^2)*
+    (2*p^4*w^2 + 2*ds*p^4*w^2 + ds^2*p^4*Pe^2*w^2 + ds*p^3*pa*Pe^2*w^2 - ds^2*p^3*pa*Pe^2*w^2 + 
+        dds*p^4*pa*Pe^2*w^2 - ds*p^4*pa*Pe^2*w^2 - dds*p^5*pa*Pe^2*w^2 + 2*ds*p^4*w^4 + ds^2*p^4*w^4) + 
+    27*(2*ds*p^6*w^4 + ds^2*p^6*Pe^2*w^4 + dds*ds*p^6*pa*Pe^2*w^4 - ds^2*p^6*pa*Pe^2*w^4 - 
+        dds*ds*p^7*pa*Pe^2*w^4 + ds^2*p^6*w^6))^2/2916]"
+    u2 = string_to_function(u2_str, [:p, :pa, :Pe, :w, :ds, :dds]); 
+    
+    # ϕ, ϕa, v0, w = 0.7, 0.3, 7.5, 0.1
+    # uu1 = u1(ϕ, ϕa, v0, w, ds(ϕ), dsp(ϕ))
+    # uu2 = u2(ϕ, ϕa, v0, w, ds(ϕ), dsp(ϕ))
+    shift_str = "(-2*p^2 - p^2*w^2 - 2*ds*p^2*w^2)/3"
+    shift_fn = string_to_function(shift_str, [:p, :pa, :Pe, :w, :ds, :dds]); 
+
+    function re_eigen_f(ϕ, ϕa, v0, w, ds, dsp)
+    return ( -(cbrt(u1(ϕ, ϕa, v0, w, ds, dsp))+cbrt(u2(ϕ, ϕa, v0, w, ds, dsp)))/2 + shift_fn(ϕ, ϕa, v0, w, ds, dsp))/ϕ^2
+    end
+    # ϕ, ϕa, v0, w = 0.7, 0.3, 7.5, 0.1
+    # re_eigen_f(ϕ, ϕa, v0, w, ds(ϕ), dsp(ϕ))
+
+    #check complex
+    discriminant_str = "(p^9*(-4*p + (-2*(-1 + ds)*p + 3*(ds^2*p - (ds^2 + ds*(-1 + p) + dds*(-1 + p)*p)*pa)*Pe^2)*w^2 - 
+    (-1 + ds)^2*p*w^4)^3)/729 + 
+    (2*(2*p^2 + p^2*w^2 + 2*ds*p^2*w^2)^3 - 9*(2*p^2 + p^2*w^2 + 2*ds*p^2*w^2)*
+    (2*p^4*w^2 + 2*ds*p^4*w^2 + ds^2*p^4*Pe^2*w^2 + ds*p^3*pa*Pe^2*w^2 - ds^2*p^3*pa*Pe^2*w^2 + 
+    dds*p^4*pa*Pe^2*w^2 - ds*p^4*pa*Pe^2*w^2 - dds*p^5*pa*Pe^2*w^2 + 2*ds*p^4*w^4 + ds^2*p^4*w^4) + 
+    27*(2*ds*p^6*w^4 + ds^2*p^6*Pe^2*w^4 + dds*ds*p^6*pa*Pe^2*w^4 - ds^2*p^6*pa*Pe^2*w^4 - 
+    dds*ds*p^7*pa*Pe^2*w^4 + ds^2*p^6*w^6))^2/2916"
+    discriminant_f = string_to_function(discriminant_str, [:p, :pa, :Pe, :w, :ds, :dds]);
+    # ϕ, ϕa, v0, w = 0.7, 0.3, 7.5, 0.1
+    # discriminant_f(ϕ, ϕa, v0, w, ds(ϕ), dsp(ϕ))
+
+#
+
+function Dw(ϕ, ϕa, v0, w, ds, dsp)
+    # if discriminant_f(ϕ, ϕa, v0, w, ds, dsp) ≥ 0
+    #     return (-(  u1dw(ϕ, ϕa, v0, w, ds, dsp)*cbrt(u1(ϕ, ϕa, v0, w, ds, dsp))^(-2)+  u2dw(ϕ, ϕa, v0, w, ds, dsp)*cbrt(u2(ϕ, ϕa, v0, w, ds, dsp))^(-2)    )/6 + shiftdw(ϕ, ϕa, v0, w, ds, dsp))/ϕ^2
+    # else
+        vars = complex.([ϕ, ϕa, v0, w, ds, dsp])
+        return real( ( (  u1dw(vars...)*(u1(vars...))^(-2/3)+  u2dw(vars...)*(u2(vars...))^(-2/3)    )/3 + shiftdw(vars...))/ϕ^2 )
+    # end
 end
 
-function return_spin(;Pe = Pe, Δϕ = Δϕ)
+function Dw2(ϕ, ϕa, v0, w, ds, dsp)
+    # if discriminant_f(ϕ, ϕa, v0, w, ds, dsp) ≥ 0
+    #     return ((  u1dw(ϕ, ϕa, v0, w, ds, dsp)*cbrt(u1(ϕ, ϕa, v0, w, ds, dsp))^(-2)+  u2dw(ϕ, ϕa, v0, w, ds, dsp)*cbrt(u2(ϕ, ϕa, v0, w, ds, dsp))^(-2)    )/3 + shiftdw(ϕ, ϕa, v0, w, ds, dsp))/ϕ^2
+    # else
+        vars = complex.([ϕ, ϕa, v0, w, ds, dsp])
+        z = (-1+im*sqrt(3))/2
+        return real( ( (  z*u1dw(vars...)*(u1(vars...))^(-2/3)+  z^2*u2dw(vars...)*(u2(vars...))^(-2/3)    )/3 + shiftdw(vars...))/ϕ^2 )
+    # end
+end
+
+function Dw3(ϕ, ϕa, v0, w, ds, dsp)
+    # if discriminant_f(ϕ, ϕa, v0, w, ds, dsp) ≥ 0
+    #     return ((  u1dw(ϕ, ϕa, v0, w, ds, dsp)*cbrt(u1(ϕ, ϕa, v0, w, ds, dsp))^(-2)+  u2dw(ϕ, ϕa, v0, w, ds, dsp)*cbrt(u2(ϕ, ϕa, v0, w, ds, dsp))^(-2)    )/3 + shiftdw(ϕ, ϕa, v0, w, ds, dsp))/ϕ^2
+    # elsed
+        vars = complex.([ϕ, ϕa, v0, w, ds, dsp])
+        z = (-1+im*sqrt(3))/2
+        return real( ( (  z^2*u1dw(vars...)*(u1(vars...))^(-2/3)+  z*u2dw(vars...)*(u2(vars...))^(-2/3)    )/3 + shiftdw(vars...))/ϕ^2 )
+    # end
+end
+
+function relambw(w; ϕa = 0.1, ϕ = 0.7, v = 7.5)
+    ω = w;
+    Pe = v;
+    ϕ0 = 1- ϕ;
+    DS = self_diff(ϕ);
+    DSP = self_diff_prime(ϕ);
+
+    DD = (1-DS)/ϕ
+    s = DD - 1
+    W = [-ω^2             0          -im*ω*Pe*ϕ0; 
+            -ω^2*ϕa*DD      -ω^2*DS     -im*ω*Pe*(ϕa*s+DS); 
+            -im*ω*Pe*ϕa*DSP -im*ω*Pe*DS -ω^2*DS-2         ]
+    values,vectors = eigen(W)
+    return real(values[3])
+end
+
+function relambw2(w; ϕa = 0.1, ϕ = 0.7, v = 7.5)
+    ω = w;
+    Pe = v;
+    ϕ0 = 1- ϕ;
+    DS = self_diff(ϕ);
+    DSP = self_diff_prime(ϕ);
+
+    DD = (1-DS)/ϕ
+    s = DD - 1
+    W = [-ω^2             0          -im*ω*Pe*ϕ0; 
+            -ω^2*ϕa*DD      -ω^2*DS     -im*ω*Pe*(ϕa*s+DS); 
+            -im*ω*Pe*ϕa*DSP -im*ω*Pe*DS -ω^2*DS-2         ]
+    values,vectors = eigen(W)
+    return real(values[2])
+end
+
+function relambw3(w; ϕa = 0.1, ϕ = 0.7, v = 7.5)
+    ω = w;
+    Pe = v;
+    ϕ0 = 1- ϕ;
+    DS = self_diff(ϕ);
+    DSP = self_diff_prime(ϕ);
+
+    DD = (1-DS)/ϕ
+    s = DD - 1
+    W = [-ω^2             0          -im*ω*Pe*ϕ0; 
+            -ω^2*ϕa*DD      -ω^2*DS     -im*ω*Pe*(ϕa*s+DS); 
+            -im*ω*Pe*ϕa*DSP -im*ω*Pe*DS -ω^2*DS-2         ]
+    values,vectors = eigen(W)
+    return real(values[1])
+end
+
+function imlambw(w; ϕa = 0.1, ϕ = 0.7, v = 7.5)
+    ω = w;
+    Pe = v;
+    ϕ0 = 1- ϕ;
+    DS = self_diff(ϕ);
+    DSP = self_diff_prime(ϕ);
+
+    DD = (1-DS)/ϕ
+    s = DD - 1
+    W = [-ω^2             0          -im*ω*Pe*ϕ0; 
+            -ω^2*ϕa*DD      -ω^2*DS     -im*ω*Pe*(ϕa*s+DS); 
+            -im*ω*Pe*ϕa*DSP -im*ω*Pe*DS -ω^2*DS-2         ]
+    values,vectors = eigen(W)
+    values = sort(values,by= x->imag.(x))
+    return imag(values[3])
+end
+
+function imlambw2(w; ϕa = 0.1, ϕ = 0.7, v = 7.5)
+    ω = w;
+    Pe = v;
+    ϕ0 = 1- ϕ;
+    DS = self_diff(ϕ);
+    DSP = self_diff_prime(ϕ);
+
+    DD = (1-DS)/ϕ
+    s = DD - 1
+    W = [-ω^2             0          -im*ω*Pe*ϕ0; 
+            -ω^2*ϕa*DD      -ω^2*DS     -im*ω*Pe*(ϕa*s+DS); 
+            -im*ω*Pe*ϕa*DSP -im*ω*Pe*DS -ω^2*DS-2         ]
+    values,vectors = eigen(W)
+    values = sort(values,by= x->imag.(x))
+    return imag(values[1])
+end
+
+function imlambw3(w; ϕa = 0.1, ϕ = 0.7, v = 7.5)
+    ω = w;
+    Pe = v;
+    ϕ0 = 1- ϕ;
+    DS = self_diff(ϕ);
+    DSP = self_diff_prime(ϕ);
+
+    DD = (1-DS)/ϕ
+    s = DD - 1
+    W = [-ω^2             0          -im*ω*Pe*ϕ0; 
+            -ω^2*ϕa*DD      -ω^2*DS     -im*ω*Pe*(ϕa*s+DS); 
+            -im*ω*Pe*ϕa*DSP -im*ω*Pe*DS -ω^2*DS-2         ]
+    values,vectors = eigen(W)
+    values = sort(values,by= x->imag.(x))
+    return imag(values[2])
+end
+
+
+function is_stable_value(ϕa, ϕp; Pe = 10.)
+
+    ϕ  = ϕa + ϕp
+    max_val = relambw(0.01; ϕa = ϕa, ϕ = ϕ, v = Pe)
+
+    # get extreme values 
+    f(x) = Dw(ϕ, ϕa, Pe, x, ds(ϕ), dsp(ϕ))*Dw2(ϕ, ϕa, Pe, x, ds(ϕ), dsp(ϕ))*Dw3(ϕ, ϕa, Pe, x, ds(ϕ), dsp(ϕ))
+    try
+        ws = find_zeros(f,(1e-10,10))
+        for w in ws
+            max_val = max(max_val, relambw(w; ϕa = ϕa, ϕ = ϕ, v = Pe) )
+        end
+    catch
+    end
+
+    return max_val-1e-10
+end
+
+function is_stable_value_real(ϕa, ϕp; Pe = 10.)
+    ϕ  = ϕa + ϕp
+    expr2 = (β(ϕa, ϕp) + α(ϕa, ϕp)*Pe^2)
+    expr1 = β(ϕa, ϕp)- α(ϕa, ϕp)*Pe^2-4*ϕ
+    return real(expr1+sqrt(complex(expr2^2 - 4*ϕp*β(ϕa, ϕp)*ds(ϕ)^2*Pe^2)))
+end
+
+# function is_complex_value(ϕa, ϕp; Pe = 10.) # positive implies complex
+#     ϕ  = ϕa + ϕp
+
+#     # get extreme values 
+#     f(x) = Dw(ϕ, ϕa, Pe, x, ds(ϕ), dsp(ϕ))*Dw2(ϕ, ϕa, Pe, x, ds(ϕ), dsp(ϕ))*Dw3(ϕ, ϕa, Pe, x, ds(ϕ), dsp(ϕ))
+#     ws = find_zeros(f,(1e-10,10))
+#     ind = argmax(relambw.(ws; ϕa = ϕa, ϕ = ϕ, v = Pe) )
+
+#     return discriminant_f(ϕ, ϕa, v0, ws[ind], ds(ϕ), dsp(ϕ))
+# end
+
+function is_stable_value_finite(ϕa, ϕp; Pe = 10., Lx = 20)
+    ω = 2*π/Lx;
+        ϕ  = ϕa + ϕp;
+        ϕ0 = 1- ϕ;
+        ds = self_diff(ϕ);
+        dsp = self_diff_prime(ϕ);
+        DD = (1-ds)/ϕ
+        s = DD - 1
+        W = [-ω^2             0          -im*ω*Pe*ϕ0; 
+            -ω^2*ϕa*DD      -ω^2*ds     -im*ω*Pe*(ϕa*s+ds); 
+            -im*ω*Pe*ϕa*dsp -im*ω*Pe*ds -ω^2*ds-2         ]
+        values,vectors = eigen(W)
+    return real(values[3])
+end
+
+function is_complex_value(ϕa, ϕp; Pe = 10.) # positive implies complex
+    ϕ  = ϕa + ϕp
+    # get extreme values 
+    f(x) = Dw(ϕ, ϕa, Pe, x, ds(ϕ), dsp(ϕ))*Dw2(ϕ, ϕa, Pe, x, ds(ϕ), dsp(ϕ))*Dw3(ϕ, ϕa, Pe, x, ds(ϕ), dsp(ϕ))
+    ws = find_zeros(f,(1e-10,10))
+    try
+        if ws == [1e-10]
+            expr2 = (β(ϕa, ϕp) + α(ϕa, ϕp)*Pe^2)
+            return -(expr2^2 - 4*ϕp*β(ϕa, ϕp)*ds(ϕ)^2*Pe^2)
+        else
+            ind = argmax(relambw.(ws; ϕa = ϕa, ϕ = ϕ, v = Pe) )
+            return discriminant_f(ϕ, ϕa, Pe, ws[ind], ds(ϕ), dsp(ϕ)) - 1e-15
+        end
+    catch
+        # expr2 = (β(ϕa, ϕp) + α(ϕa, ϕp)*Pe^2)
+        return -1e-22 #-(expr2^2 - 4*ϕp*β(ϕa, ϕp)*ds(ϕ)^2*Pe^2)
+    end
+end
+
+function return_spin(;Pe = Pe, Δϕ = Δϕ, ϕp_max = 1, save_on =true)
+        try 
+            file_name = "/store/DAMTP/jm2386/Active_Lattice/data/pm_pdes_pro/spinodal/Δϕ=$(Δϕ)_Pe=$(Pe).jld2"
+            data = load(file_name)
+            @unpack ϕas_left, ϕas_right, ϕps, indl, indr = data
+            nϕps = [z for (x,y,z) in zip(ϕas_left,ϕas_right,ϕps) if (y>0.5)|(z > 0.2) ]
+            nϕas_right = [y for (x,y,z) in zip(ϕas_left,ϕas_right,ϕps) if (y>0.5)|(z > 0.2) ]
+            nϕas_left = [x for (x,y,z) in zip(ϕas_left,ϕas_right,ϕps) if (y>0.5)|(z > 0.2) ]
+            return nϕas_left, nϕas_right, nϕps, indl, indr
+        catch 
+            println("computing: ","Δϕ=$(Δϕ)_Pe=$(Pe)")
+            ϕp_grid = Δϕ:Δϕ:ϕp_max
+            ϕps = []
+            ϕas_left = []
+            ϕas_right = []
+            for ϕp in ϕp_grid
+                f(x) = is_stable_value(x, ϕp; Pe = Pe)
+                try
+                    # ϕal, ϕar = find_zeros(f,(1e-10,1-ϕp-1e-10))
+                    ϕal, ϕar = find_zeros(f,(0.3,0.9))
+                    push!(ϕas_left, ϕal)
+                    push!(ϕas_right, ϕar)
+                    push!(ϕps, ϕp)
+                catch
+                end
+            end
+            ϕa_grid = ϕas_left[end]:Δϕ:ϕas_right[end]
+            for ϕa in ϕa_grid
+                g(y) = is_stable_value(ϕa,y; Pe = Pe)
+                try
+                    ϕp = find_zero(g,(1e-10,1-ϕa-1e-8))
+                    f(x) = is_stable_value(x, ϕp; Pe = Pe)
+                    ϕal, ϕar = find_zeros(f,(0,1-ϕp-1e-8))
+                    push!(ϕas_left, ϕal)
+                    push!(ϕas_right, ϕar)
+                    push!(ϕps, ϕp)
+                catch
+                end
+            end
+            
+            indl = argmax(sign.(is_complex_value.(ϕas_left, ϕps; Pe = Pe)))
+            indr  = argmax(sign.(is_complex_value.(ϕas_right, ϕps; Pe = Pe)))
+
+            file_name = "/store/DAMTP/jm2386/Active_Lattice/data/pm_pdes_pro/spinodal/Δϕ=$(Δϕ)_Pe=$(Pe).jld2"
+            data = Dict{String,Any}()
+            @pack! data = ϕas_left, ϕas_right, ϕps, indl, indr
+            safesave(file_name,data)
+            println("saved: ","Δϕ=$(Δϕ)_Pe=$(Pe)")
+            return ϕas_left, ϕas_right, ϕps
+        end
+end
+
+function return_spin_finite(;Pe = 7.5, Δϕ = 0.01, Lx = 20)
     ϕp_grid = Δϕ:Δϕ:1
     ϕps = []
     ϕas_left = []
     ϕas_right = []
     for ϕp in ϕp_grid
-        f(x) = is_stable_value(x, ϕp; Pe = Pe)
+        f(x) = is_stable_value_finite(x, ϕp; Pe = Pe, Lx=Lx)
         try
             ϕal, ϕar = find_zeros(f,(0,1-ϕp-1e-8))
             push!(ϕas_left, ϕal)
@@ -244,52 +636,107 @@ function return_spin(;Pe = Pe, Δϕ = Δϕ)
         catch
         end
     end
-    ϕa_grid = ϕas_left[end]:Δϕ:ϕas_right[end]
-    for ϕa in ϕa_grid
-        g(y) = is_stable_value(ϕa,y; Pe = Pe)
-        try
-            ϕp = find_zero(g,(0,1-ϕa-1e-8))
-            f(x) = is_stable_value(x, ϕp; Pe = Pe)
-            ϕal, ϕar = find_zeros(f,(0,1-ϕp-1e-8))
-            push!(ϕas_left, ϕal)
-            push!(ϕas_right, ϕar)
-            push!(ϕps, ϕp)
-        catch
-        end
-    end
+    # ϕa_grid = ϕas_left[end]:Δϕ:ϕas_right[end]
+    # for ϕa in ϕa_grid
+    #     g(y) = is_stable_value_finite(ϕa,y; Pe = Pe, Lx=Lx)
+    #     try
+    #         ϕp = find_zero(g,(0,1-ϕa-1e-8))
+    #         f(x) = is_stable_value_finite(x, ϕp; Pe = Pe, Lx=Lx)
+    #         ϕal, ϕar = find_zeros(f,(0,1-ϕp-1e-8))
+    #         push!(ϕas_left, ϕal)
+    #         push!(ϕas_right, ϕar)
+    #         push!(ϕps, ϕp)
+    #     catch
+    #     end
+    # end
     return ϕas_left, ϕas_right, ϕps
 end
 
-function return_spin_from_grid(;max_ϕa = 1.0, Pe = Pe, γ_grid = 0.1:0.1:1, ϕ1_grid = [],ϕ2_grid = [], ϕp_grid = 0.1:0.1:1)
-    ϕps = []
-    ϕas_left = []
-    ϕas_right = []
-    γs = []
-    ϕ1s = []
-    ϕ2s = []
-    for (ϕp, γ, ϕ1, ϕ2) in zip(ϕp_grid,γ_grid, ϕ1_grid, ϕ2_grid)
-        f(x) = is_stable_value(x, ϕp; Pe = Pe)
-        try
-            ϕal, ϕar = find_zeros(f,(0,1-ϕp-1e-8))
-            push!(ϕas_left, ϕal)
-            push!(ϕas_right, ϕar)
-            push!(ϕps, ϕp)
-            push!(γs, γ)
-            push!(ϕ1s, ϕ1)
-            push!(ϕ2s, ϕ2)
-        catch
- 
-            push!(ϕas_left, max_ϕa)
-            push!(ϕas_right, max_ϕa)
-            push!(ϕps, ϕp)
-            push!(γs, γ)
-            push!(ϕ1s, ϕ1)
-            push!(ϕ2s, ϕ2)
+function return_spin_from_grid(grid_name; max_ϕa = 1.0, Pe = Pe, γ_grid = 0.1:0.1:1, ϕ1_grid = [],ϕ2_grid = [], ϕp_grid = 0.1:0.1:1)
+    try 
+        file_name = "/store/DAMTP/jm2386/Active_Lattice/data/pm_pdes_pro/spinodal/$(grid_name).jld2"
+        data = load(file_name)
+        @unpack ϕas_left, ϕas_right, ϕps, γs, ϕ1s, ϕ2s = data
+        nϕps = [z for (x,y,z) in zip(ϕas_left,ϕas_right,ϕps) if (y>0.5)|(z > 0.2) ]
+        nϕas_right = [y for (x,y,z) in zip(ϕas_left,ϕas_right,ϕps) if (y>0.5)|(z > 0.2) ]
+        nϕas_left = [x for (x,y,z) in zip(ϕas_left,ϕas_right,ϕps) if (y>0.5)|(z > 0.2) ]
+        nϕas_left = [x for (x,y,z) in zip(ϕas_left,ϕas_right,ϕps) if (y>0.5)|(z > 0.2) ]
+        γs  = [x for (x,y,z) in zip(γs,ϕas_right,ϕps) if (y>0.5)|(z > 0.2) ]
+        ϕ1s = [x for (x,y,z) in zip(ϕ1s,ϕas_right,ϕps) if (y>0.5)|(z > 0.2) ]
+        ϕ2s = [x for (x,y,z) in zip(ϕ2s,ϕas_right,ϕps) if (y>0.5)|(z > 0.2) ]
+        
+        return nϕas_left, nϕas_right, nϕps, γs, ϕ1s, ϕ2s
+    catch
+        println("computing: ","$(grid_name)")
+        ϕps = []
+        ϕas_left = []
+        ϕas_right = []
+        γs = []
+        ϕ1s = []
+        ϕ2s = []
+        for (ϕp, γ, ϕ1, ϕ2) in zip(ϕp_grid,γ_grid, ϕ1_grid, ϕ2_grid)
+            f(x) = is_stable_value(x, ϕp; Pe = Pe)
+            try
+                # ϕal, ϕar = find_zeros(f,(0,1-ϕp-1e-8))
+                ϕal, ϕar = find_zeros(f,(0.3,0.9))
+                push!(ϕas_left, ϕal)
+                push!(ϕas_right, ϕar)
+                push!(ϕps, ϕp)
+                push!(γs, γ)
+                push!(ϕ1s, ϕ1)
+                push!(ϕ2s, ϕ2)
+            catch
+    
+                push!(ϕas_left, max_ϕa)
+                push!(ϕas_right, max_ϕa)
+                push!(ϕps, ϕp)
+                push!(γs, γ)
+                push!(ϕ1s, ϕ1)
+                push!(ϕ2s, ϕ2)
+            end
         end
+
+        file_name = "/store/DAMTP/jm2386/Active_Lattice/data/pm_pdes_pro/spinodal/$(grid_name).jld2"
+        data = Dict{String,Any}()
+        @pack! data = ϕas_left, ϕas_right, ϕps, γs, ϕ1s, ϕ2s
+        safesave(file_name,data)
+        println("saved: ","$(grid_name)")
+        return ϕas_left, ϕas_right, ϕps, γs, ϕ1s, ϕ2s
     end
-    return ϕas_left, ϕas_right, ϕps, γs, ϕ1s, ϕ2s
 end
 
+
+function return_spin_from_grid_real(; max_ϕa = 1.0, Pe = Pe, γ_grid = 0.1:0.1:1, ϕ1_grid = [],ϕ2_grid = [], ϕp_grid = 0.1:0.1:1)
+        ϕps = []
+        ϕas_left = []
+        ϕas_right = []
+        γs = []
+        ϕ1s = []
+        ϕ2s = []
+        for (ϕp, γ, ϕ1, ϕ2) in zip(ϕp_grid,γ_grid, ϕ1_grid, ϕ2_grid)
+            f(x) = is_stable_value_real(x, ϕp; Pe = Pe)
+            try
+                ϕal, ϕar = find_zeros(f,(0,1-ϕp-1e-8))
+                # ϕal, ϕar = find_zeros(f,(0.3,0.9))
+                push!(ϕas_left, ϕal)
+                push!(ϕas_right, ϕar)
+                push!(ϕps, ϕp)
+                push!(γs, γ)
+                push!(ϕ1s, ϕ1)
+                push!(ϕ2s, ϕ2)
+            catch
+    
+                push!(ϕas_left, max_ϕa)
+                push!(ϕas_right, max_ϕa)
+                push!(ϕps, ϕp)
+                push!(γs, γ)
+                push!(ϕ1s, ϕ1)
+                push!(ϕ2s, ϕ2)
+            end
+        end
+
+        return ϕas_left, ϕas_right, ϕps, γs, ϕ1s, ϕ2s
+end
 #
 
 function return_complex_boundary_pt(ϕa; Pe = 10.)

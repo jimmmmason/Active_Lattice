@@ -1,6 +1,6 @@
-cd("/home/jm2386/Active_Lattice/")
-using DrWatson
-@quickactivate "Active_Lattice"
+cd("/home/jm2386/Active_Lattice/");
+using DrWatson;
+@quickactivate "Active_Lattice";
 
 using TensorOperations, LinearAlgebra
 
@@ -198,6 +198,11 @@ using TensorOperations, LinearAlgebra
         return "/store/DAMTP/jm2386/Active_Lattice/data/pm_pdes_raw/$(name)/[DT,v0,DR,Δx,Lx,ϕa,ϕp]=$([DT,v0,DR,Δx,Lx,ϕa,ϕp])/t=$(s).jld2"
     end
 
+    function speed_save_name(param::Dict{String, Any})
+        @unpack DT, v0, DR, Δx, Lx, ϕa, ϕp, name, save_interval = param
+        return "/store/DAMTP/jm2386/Active_Lattice/data/pm_pdes_pro/speeds/$(name)/[DT,v0,DR,Δx,Lx,ϕa,ϕp]=$([DT,v0,DR,Δx,Lx,ϕa,ϕp]).jld2"
+    end
+
     function pde_time_series_save_name(param::Dict{String, Any},t::Float64)
         @unpack DT, v0, DR, Δx, Lx, ϕa, ϕp, name, save_interval = param
         s = round(t ; digits = Int64( -log10(save_interval) ÷ 1 ))
@@ -252,6 +257,47 @@ using TensorOperations, LinearAlgebra
         return t_saves, f_saves
     end
 
+    function silent_load_compress_pde(param::Dict{String, Any})
+        @unpack DT, v0, DR, Δx, Lx, ϕa, ϕp, T , name, save_interval, save_on = param
+        t_saves::Vector{Float64}            = []
+        f_saves::Vector{Matrix{Float64}}  = []
+        data::Dict{String, Any} = Dict()
+
+        try
+            try
+                filename::String = pde_time_series_save_name(param,T)
+                data = load(filename)
+            catch
+                filename::String = pde_time_series_save_name(param,T-save_interval)
+                data= load(filename)
+            end
+            @unpack t_saves, f_saves = data
+            # println("fast load")
+        catch
+            # println("full load")
+            s = 0.
+            t = 0.
+            while s<T
+                try
+                    t, f = load_pde(param,s)
+                    push!(f_saves,f)
+                    push!(t_saves,t)
+                    s += save_interval
+                catch
+                    s += save_interval
+                end
+            end
+            if t > 0.
+                filename::String = pde_time_series_save_name(param,t)
+                data = Dict("f_saves" => f_saves, "t_saves" => t_saves)
+                safesave(filename,data)
+                # println("saved")
+            end
+        end
+
+        return t_saves, f_saves
+    end
+
     function pde_vid_save_name(param::Dict{String, Any},t::Float64)
         @unpack DT, v0, DR, N, Lx, Ly, ϕa, ϕp, name, save_interval = param
         s = round(t ; digits = Int64( -log10(save_interval) ÷ 1 ))
@@ -259,12 +305,57 @@ using TensorOperations, LinearAlgebra
         pathname = "/store/DAMTP/jm2386/Active_Lattice/plots/vids/pm_pdes_vids/$(name)/[DT,v0,DR,N,Lx,Ly,ϕa,ϕp]=$([DT,v0,DR,N,Lx,Ly,ϕa,ϕp])"
         return filename, pathname
     end
+
+    function load_last_pde(param::Dict{String, Any})
+        @unpack DT, v0, DR, Δx, Lx, ϕa, ϕp, T , name, Nx, save_interval, save_on, δt = param
+        # configuration
+        f::Matrix{Float64} = initiate_uniform_pde(ϕa, ϕp, Nx);
+        t::Float64 = 0.;
+        s::Float64 = T;
+        loaded::Bool = false
+
+        while s>0.
+            try
+                t, f = load_pde(param,s)
+                loaded = true
+                s = -1.
+                println("loaded at t=$(t)")
+            catch
+                loaded = false
+                s += -save_interval
+            end
+        end
+
+        return loaded, f, t
+    end
+
+    function quiet_load_last_pde(param::Dict{String, Any})
+        @unpack DT, v0, DR, Δx, Lx, ϕa, ϕp, T , name, Nx, save_interval, save_on, δt = param
+        # configuration
+        f::Matrix{Float64} = initiate_uniform_pde(ϕa, ϕp, Nx);
+        t::Float64 = 0.;
+        s::Float64 = T;
+        loaded::Bool = false
+
+        while s>0.
+            try
+                t, f = load_pde(param,s)
+                loaded = true
+                s = -1.
+            catch
+                loaded = false
+                s += -save_interval
+            end
+        end
+
+        return loaded, f, t
+    end
 #
 
 ## pertubation
-    function lin_pert_values(param)
+    function lin_pert_values(param;wave_num =1,wave_choice=3)
         @unpack DT, v0, DR, Lx, ϕa, ϕp = param
-        ω = 2*π/Lx;
+        ω = 2*π*wave_num/Lx;
         Pe = v0;
         ϕ  = ϕa + ϕp;
         ϕ0 = 1- ϕ;
@@ -276,7 +367,7 @@ using TensorOperations, LinearAlgebra
             -ω^2*ϕa*DD      -ω^2*ds     -im*ω*Pe*(ϕa*s+ds); 
             -im*ω*Pe*ϕa*dsp -im*ω*Pe*ds -ω^2*ds-2         ]
         values,vectors = eigen(W)
-        return ω, values[3], vectors[:,3]
+        return ω, values[wave_choice], vectors[:,wave_choice]
     end
 
     function dist_from_unif(f, param)
@@ -284,30 +375,122 @@ using TensorOperations, LinearAlgebra
         return sqrt(sum( (f[:,1] .- ϕa/2).^2 + (f[:,2] .- ϕa/2).^2 + (f[:,3] .- ϕp).^2)/Nx)
     end
 
-    function perturb_pde!(f::Matrix{Float64}, param::Dict{String, Any})
+    function dist_from_unifs(f_saves, param)
+        return [dist_from_unif(f, param) for f in f_saves]
+    end
+
+    function node_sym(f)
+        return maximum(f - f[end:-1:1,[2,1,3]])
+    end
+
+    function perturb_pde!(f::Matrix{Float64}, param::Dict{String, Any}; wave_num = 1)
         @unpack DT, v0, DR, Δx, Lx, ϕa, ϕp, T , name, Nx, save_interval, save_on, δt, δ, pert = param
         
         if pert == "rand"
             pertf = 2*rand(Nx,3) .-1
+        elseif pert == "double"
+            ω, value, vector = lin_pert_values(param;wave_num = wave_num,wave_choice=3)
+    
+            wave   = exp.((1:Nx)*(wave_num*im*2*π/Nx))
+            pertf  = zeros(Nx,3)
+    
+            pertf[:,1] = real.( wave*(vector[2]- vector[3])/2 )
+            pertf[:,2] = real.( wave*(vector[2]+ vector[3])/2 ) 
+            pertf[:,3] = real.( wave*(vector[1]-vector[2]) )
+
+            # ω, value, vector = lin_pert_values(param;wave_num = wave_num,wave_choice=2)
+    
+            # wave   = exp.(-(1:Nx)*(wave_num*im*2*π/Nx))
+            # pertf  = zeros(Nx,3)
+    
+            # pertf[:,1] = real.( wave*(vector[1]- vector[2])/2 )
+            # pertf[:,2] = real.( wave*(vector[1]+ vector[2])/2 ) 
+            # pertf[:,3] = real.( wave*(vector[3]) )
+            
+            pertf += pertf[end:-1:1,[2,1,3]]
+
+            print("sym pert: $(node_sym(pertf))")
         else
-            ω, value, vector = lin_pert_values(param)
+            ω, value, vector = lin_pert_values(param;wave_num = wave_num)
+    
+            wave   = exp.((1:Nx)*(wave_num*im*2*π/Nx))
+            pertf    = zeros(Nx,3)
+    
+            pertf[:,1] = real.( wave*(vector[2]- vector[3])/2 )
+            pertf[:,2] = real.( wave*(vector[2]+ vector[3])/2 ) 
+            pertf[:,3] = real.( wave*(vector[1]-vector[2]) )
 
-            wave::Vector{ComplexF64}   = exp.((1:Nx)*(im*2*π/Nx))
-            pertf::Matrix{Float64}     = zeros(Nx,3)
+            println("max pert")
+        end
+    
+        c = norm(pertf)/sqrt(Nx)
+        sf = 1 
 
-            pertf[:,1] = real.( wave*(vector[1]- vector[2])/2 )
-            pertf[:,2] = real.( wave*(vector[1]+ vector[2])/2 ) 
-            pertf[:,3] = real.( wave*(vector[3]) )
+        max_pert = maximum(δ*sum(pertf;dims=2)/c)
+        ϵ = 1e-5
+        if max_pert>(1-(ϕa+ϕp))
+            sf = (1-(ϕa+ϕp)-ϵ)/max_pert
+        elseif max_pert>(ϕa+ϕp)
+            sf = ((ϕa+ϕp)+ϵ)/max_pert
+        else
+            sf = 1
         end
 
-        c = norm(pertf)/sqrt(Nx)
-        f += δ*pertf/c
+        pertf = sf*δ*pertf/c
+        
+        # check active
+        max_pert = maximum(pertf[:,1]+pertf[:,2])
+        ϵ = 1e-8
+        if max_pert>(ϕa)
+            sf = (ϕa-ϵ)/max_pert
+        else
+            sf = 1
+        end
 
+        pertf[:,1:2] = sf*pertf[:,1:2]
+
+        # check passive
+        max_pert = maximum(pertf[:,3])
+        ϵ = 1e-8
+        if max_pert>(ϕp)
+            sf = ((ϕp)-ϵ)/max_pert
+        else
+            sf = 1
+        end
+        pertf[:,3] = sf*pertf[:,3]
+
+        # recheck active
+
+        max_pert = maximum(sum(pertf;dims=2))
+        ϵ = 1e-5
+        if max_pert>(1-(ϕa+ϕp))
+            sf = (1-(ϕa+ϕp)-ϵ)/max_pert
+        elseif max_pert>(ϕa+ϕp)
+            sf = ((ϕa+ϕp)+ϵ)/max_pert
+        else
+            sf = 1
+        end
+
+        f += pertf
+        
         return f
     end
+
+    # function saftey_f(f)
+
+    #     for i in 1:3
+    #         f[:,i] = [ max(x,0) for x in f[:,i] ]
+    #     end 
+
+    #     rho = sum(f;dims = 2)
+
+    #     sf = [ max(1-1e-8,x) for x in rho]
+
+    #     return f./sf
+    # end 
 #
 
-## solving functions 
+## solving functions
 
     function run_new_pde(param::Dict{String, Any})
         @unpack DT, v0, DR, Δx, Lx, ϕa, ϕp, T , name, Nx, save_interval, save_on, δt = param
@@ -327,6 +510,38 @@ using TensorOperations, LinearAlgebra
         while t < T
             while t < s
                 t, f = time_step!(t, f; δt=δt, Nx=Nx, Lx=Lx, DT=DT, v0=v0, DR=DR);
+            end
+            #save snapshot
+            if save_on
+                filename    = pde_save_name(param,t)
+                data        = Dict("f" => f, "t" => t)
+                safesave(filename,data)
+            end
+            s += save_interval
+        end
+        return t, f
+    end
+
+    function run_new_pde_sym(param::Dict{String, Any})
+        @unpack DT, v0, DR, Δx, Lx, ϕa, ϕp, T , name, Nx, save_interval, save_on, δt = param
+        # configuration
+        f::Matrix{Float64} = initiate_uniform_pde(ϕa, ϕp, Nx);
+        f = perturb_pde!(f, param);
+        t::Float64 = 0.;
+        s::Float64 = save_interval
+        f = (f + f[end:-1:1,:])./2
+
+        #inital save
+        if save_on
+            filename::String        = pde_save_name(param,t)
+            data::Dict{String, Any} = Dict("f" => f, "t" => t)
+            safesave(filename,data)
+        end
+
+        while t < T
+            while t < s
+                t, f = time_step!(t, f; δt=δt, Nx=Nx, Lx=Lx, DT=DT, v0=v0, DR=DR);
+                f = (f + f[end:-1:1,:])./2
             end
             #save snapshot
             if save_on
@@ -366,7 +581,36 @@ using TensorOperations, LinearAlgebra
         end
         return t, f
     end
+    
+    function run_current_pde_sym(param::Dict{String, Any},dt::Float64, f::Matrix{Float64},t::Float64)
+        @unpack DT, v0, DR, Δx, Lx, ϕa, ϕp, T , name, Nx, save_interval, save_on, δt = param
+        # configuration
+        s::Float64 = t + save_interval
+        t_end::Float64 = t+dt
 
+        #inital save
+        if save_on
+            filename::String = pde_save_name(param,t)
+            data::Dict{String, Any} = Dict("f" => f, "t" => t)
+            safesave(filename,data)
+        end
+
+        while t < t_end
+            while t < s
+                t, f = time_step!(t, f; δt=δt, Nx=Nx, Lx=Lx, DT=DT, v0=v0, DR=DR);
+                f = (f + f[end:-1:1,:])./2
+            end
+            #save snapshot
+            if save_on
+                filename    = pde_save_name(param,t)
+                data        = Dict("f" => f, "t" => t)
+                safesave(filename,data)
+            end
+            s += save_interval
+        end
+        return t, f
+    end
+    
     function load_and_run_pde(param::Dict{String, Any})
         @unpack DT, v0, DR, Δx, Lx, ϕa, ϕp, T , name, Nx, save_interval, save_on, δt = param
         # configuration
@@ -375,7 +619,7 @@ using TensorOperations, LinearAlgebra
         s::Float64 = T;
         loaded::Bool = false
 
-        while s>0.
+        while s>=0.
             try
                 t, f = load_pde(param,s)
                 loaded = true
@@ -493,4 +737,89 @@ using TensorOperations, LinearAlgebra
     end
 #
 
-println("v3.1")
+## stretch fns 
+    function double_sol(param, f)
+        @unpack Nx, Lx, Δx = param
+        NNx = Int64(2*Nx)
+        g = zeros(NNx,3)
+        g[2:2:NNx,:] = f
+        g[1:2:NNx,:] = (  f + circshift(f,(1,0))  ) /2
+        Δx = Δx/2
+        Nx = NNx
+        @pack! param = Δx, Nx
+        return g,param
+    end
+
+    function relax_sol(param,f,t; threshold = 1e-4)
+        @unpack Lx,save_interval = param
+        dc = threshold/Lx + 1
+        while abs(dc) > threshold/Lx
+            t,f = run_current_pde(param,save_interval, f,t)
+            _,_,dc = f_dot(param, f)
+        end
+        return f, t
+    end
+
+    function get_stretch_param(Lx)
+        param = get_grid_param(21,11)
+        @unpack Nx = param
+        param["save_interval"] = 100.0
+        param["name"] = "soliton_stretch"
+        param["Lx"] = Float64(Lx)
+        param["Δx"] = Float64(Lx/Nx)
+        return param
+    end
+
+    function densify(Lx, ΔX; save_interval = 1.0, threshold = 1e-6)
+    
+        param = get_stretch_param(Lx)
+        @pack! param = save_interval
+
+        loaded, f, t = quiet_load_last_pde(param)
+        t += 2000.0
+        
+        while param["Δx"] > ΔX
+            f, param = double_sol(param, f)
+            println("relaxing Δx = $(param["Δx"])")
+            f, t = relax_sol(param,f,t; threshold = threshold)
+        end
+
+        filename    = pde_save_name(param,t)
+        data        = Dict("f" => f, "t" => t)
+        safesave(filename,data)
+
+        return f,t
+    end
+
+    function get_stretch_param(Lx)
+        param = get_grid_param(21,11)
+        @unpack Nx = param
+        param["save_interval"] = 100.0
+        param["name"] = "soliton_stretch"
+        param["Lx"] = Float64(Lx)
+        param["Δx"] = Float64(Lx/Nx)
+        return param
+    end
+    
+    function get_dense_param(Lx, ΔX; save_interval = 1.0)
+        param = get_stretch_param(Lx)
+        @pack! param = save_interval
+    
+        while param["Δx"] > ΔX
+            param = double_param(param)
+        end
+        return param
+    end
+    
+    function double_param(param)
+        @unpack Nx, Lx, Δx = param
+        NNx = Int64(2*Nx)
+        Δx = Δx/2
+        Nx = NNx
+        @pack! param = Δx, Nx
+        return param
+    end
+#
+
+
+# println("v3.1")
